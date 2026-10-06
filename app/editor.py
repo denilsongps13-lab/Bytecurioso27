@@ -24,7 +24,12 @@ def fallback(a):
 
 def _parse_json(txt):
     txt=re.sub(r"^\`\`\`json\s*|\s*\`\`\`$","",txt.strip(),flags=re.I|re.S)
-    return json.loads(txt)
+    data=json.loads(txt)
+    if isinstance(data, list):
+        data = data[0] if data else {}
+    if not isinstance(data, dict):
+        raise ValueError("Resposta da IA não é um objeto JSON")
+    return data
 
 def _prepare_gemini(a):
     prompt=f"""{INSTRUCTIONS}
