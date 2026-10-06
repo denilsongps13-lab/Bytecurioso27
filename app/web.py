@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pathlib import Path
 from app.poster import make_test_poster,asset_status
 from app import config
@@ -23,3 +23,12 @@ def health():
 def preview_test():
     return FileResponse(make_test_poster(),media_type="image/jpeg",headers={"Cache-Control":"no-store, max-age=0"})
 
+
+
+@app.get("/terms", response_class=HTMLResponse)
+def terms():
+    return Path("terms-of-service.html").read_text(encoding="utf-8")
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy():
+    return Path("privacy-policy.html").read_text(encoding="utf-8")
