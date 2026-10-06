@@ -1,4 +1,4 @@
-import json,html,asyncio
+import json,html,asyncio,random
 from telegram import InlineKeyboardButton,InlineKeyboardMarkup,Update
 from telegram.ext import Application,CommandHandler,CallbackQueryHandler,ContextTypes
 from app import config
@@ -7,7 +7,7 @@ from app.fetcher import scan_sources,enrich_image,valid_story,classify_category
 from app.editor import prepare,public_title,finish_caption
 from app.poster import make_poster,make_test_poster,asset_status
 from app.reels import make_reel_from_poster
-from app.publishers.meta import post_instagram_reel,recent_marker_exists,check_instagram_connection,safe_error
+from app.publishers.meta import post_instagram_image,post_instagram_reel,recent_marker_exists,check_instagram_connection,safe_error
 
 SCAN_LOCK=asyncio.Lock()
 
@@ -49,18 +49,24 @@ def _published_score(a):
     return float(a.get("id") or 0)
 
 def _select_for_cycle(rows,limit):
-    ordered=sorted(rows,key=_published_score,reverse=True)
-    chosen=[]; used=set()
-    for a in ordered:
-        cat=(a.get("category") or "geral").strip().lower()
-        if cat not in used:
-            chosen.append(a); used.add(cat)
-            if len(chosen)>=limit: return chosen
-    ids={a["id"] for a in chosen}
-    for a in ordered:
-        if a["id"] not in ids:
-            chosen.append(a)
-            if len(chosen)>=limit: break
+    pool=sorted(rows,key=_published_score,reverse=True)[:10]
+    if not pool:
+        return []
+    chosen=[pool[0]]
+    used={(pool[0].get("category") or "geral").strip().lower()}
+    diverse=[x for x in pool[1:] if (x.get("category") or "geral").strip().lower() not in used]
+    random.shuffle(diverse)
+    for x in diverse:
+        if len(chosen)>=limit:
+            break
+        chosen.append(x)
+        used.add((x.get("category") or "geral").strip().lower())
+    if len(chosen)<limit:
+        selected_ids={x["id"] for x in chosen}
+        rest=[x for x in pool[1:] if x["id"] not in selected_ids]
+        random.shuffle(rest)
+        chosen.extend(rest[:max(0,limit-len(chosen))])
+    print(f"SELECTION_POOL pool={len(pool)} chosen={[(x.get('id'),x.get('category')) for x in chosen]}",flush=True)
     return chosen
 
 def _fresh_enough(a):
@@ -124,15 +130,14 @@ async def _scan_job(context):
                 print(f'DUPLICATE_CLAIM_SKIP id={aid}',flush=True)
                 continue
             poster=await asyncio.to_thread(make_poster,ai["headline"],a["category"],aid,a.get("image_url",""),a.get("source",""))
-            reel=await asyncio.to_thread(make_reel_from_poster,poster,aid)
-            video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
+            image_url=f"{config.PUBLIC_BASE_URL}/media/{poster.split('/')[-1]}"
             caption=(finish_caption(a,ai["caption_instagram"])+"\n\n"+marker).strip()
-            result=await asyncio.to_thread(post_instagram_reel,video_url,caption)
+            result=await asyncio.to_thread(post_instagram_image,image_url,caption)
             if result.get("status")!="published":
                 raise RuntimeError(f"Meta não publicou: {result}")
             set_status(aid,"published")
-            print(f"PUBLISH_OK id={aid} media_id={result.get('id','')}",flush=True)
-            msg=f"✅ Publicado automaticamente em Reels\n{ai['headline']}"
+            print(f"PUBLISH_OK id={aid} media_id={result.get('id','')} type=feed_image",flush=True)
+            msg=f"✅ Publicado automaticamente no Feed\n{ai['headline']}"
             if result.get("permalink"): msg+=f"\n🔗 {result['permalink']}"
             await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,msg)
         except Exception as e:
@@ -219,10 +224,9 @@ async def testinstagram(update:Update,context:ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⏸ Instagram continua PAUSADO. O teste visual deve ser feito com /testarte.")
         return
     poster=await asyncio.to_thread(make_test_poster)
-    reel=await asyncio.to_thread(make_reel_from_poster,poster,"instagram_test")
-    video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
+    image_url=f"{config.PUBLIC_BASE_URL}/media/{poster.split('/')[-1]}"
     try:
-        result=await asyncio.to_thread(post_instagram_reel,video_url,"🧪 Teste Byte Curioso 27. #ByteCurioso27 #Rondonia")
+        result=await asyncio.to_thread(post_instagram_image,image_url,"🧪 Teste Byte Curioso 27. #ByteCurioso27 #Rondonia")
         if result.get("status")!="published":
             raise RuntimeError(str(result))
         msg=f"✅ Teste publicado. ID: {result.get('id','')}"
@@ -268,14 +272,13 @@ async def callback(update:Update,context:ContextTypes.DEFAULT_TYPE):
         headline=a.get("title") or "Byte Curioso 27"
         caption=finish_caption(a,ai.get("caption_instagram") or a.get("title") or "")
         poster=await asyncio.to_thread(make_poster,headline,a.get("category") or "notícia",aid,a.get("image_url",""),a.get("source",""))
-        reel=await asyncio.to_thread(make_reel_from_poster,poster,aid)
-        video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
-        result=await asyncio.to_thread(post_instagram_reel,video_url,caption+"\n\n"+marker)
+        image_url=f"{config.PUBLIC_BASE_URL}/media/{poster.split('/')[-1]}"
+        result=await asyncio.to_thread(post_instagram_image,image_url,caption+"\n\n"+marker)
         if result.get("status")!="published":
             raise RuntimeError(str(result))
         set_status(aid,"published")
         await q.edit_message_reply_markup(reply_markup=None)
-        await q.message.reply_text(f"✅ Matéria #{aid} publicada.")
+        await q.message.reply_text(f"✅ Matéria #{aid} publicada no Feed.")
     except Exception as e:
         set_status(aid,"review")
         await q.message.reply_text(f"⚠️ Falha ao publicar #{aid}: {safe_error(e)}")
