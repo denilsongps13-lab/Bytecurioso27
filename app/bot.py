@@ -19,9 +19,20 @@ async def send_preview(bot,chat_id,a,ai):
          f"{html.escape(ai['caption_instagram'][:1500])}")
     await bot.send_message(chat_id=chat_id,text=txt,parse_mode="HTML",reply_markup=kb(a["id"]))
 
+def _pick_one_per_category(rows):
+    chosen=[]
+    seen=set()
+    for a in rows:
+        cat=(a.get("category") or "geral").strip().lower()
+        if cat not in seen:
+            chosen.append(a)
+            seen.add(cat)
+    return chosen
+
 async def scan_job(context: ContextTypes.DEFAULT_TYPE):
     rows=await asyncio.to_thread(scan_sources)
-    for a in rows[:config.MAX_POSTS_PER_CYCLE]:
+    selected=_pick_one_per_category(rows)
+    for a in selected:
         ai=await asyncio.to_thread(prepare,a)
         if isinstance(ai, list):
             ai = ai[0] if ai else {}
