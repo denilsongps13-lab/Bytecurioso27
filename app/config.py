@@ -21,3 +21,6 @@ TIKTOK_ENABLED = env_bool("TIKTOK_ENABLED", False)
 TIKTOK_ACCESS_TOKEN = os.getenv("TIKTOK_ACCESS_TOKEN","")
 
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL","https://bytecurioso27-news.onrender.com").rstrip("/")
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY","")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL","gemini-2.5-flash-lite")
