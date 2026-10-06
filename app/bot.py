@@ -7,7 +7,7 @@ from app.fetcher import scan_sources,enrich_image,valid_story,classify_category
 from app.editor import prepare,public_title,finish_caption
 from app.poster import make_poster,make_test_poster,asset_status
 from app.reels import make_reel_from_poster
-from app.publishers.meta import post_instagram_image,post_instagram_reel,check_instagram_connection,safe_error
+from app.publishers.meta import post_instagram_image,post_instagram_reel,post_facebook_image,check_instagram_connection,check_facebook_connection,safe_error
 
 SCAN_LOCK=asyncio.Lock()
 
@@ -128,11 +128,21 @@ async def _scan_job(context):
             caption=finish_caption(a,ai["caption_instagram"]).strip()
             result=await asyncio.to_thread(post_instagram_image,image_url,caption)
             if result.get("status")!="published":
-                raise RuntimeError(f"Meta não publicou: {result}")
+                raise RuntimeError(f"Instagram não publicou: {result}")
+            fb_result={"status":"skipped"}
+            try:
+                fb_result=await asyncio.to_thread(post_facebook_image,image_url,caption)
+                print(f"FACEBOOK_PUBLISH_OK id={aid} post_id={fb_result.get('id','')}",flush=True)
+            except Exception as fb_error:
+                print(f"FACEBOOK_PUBLISH_ERROR id={aid} error={type(fb_error).__name__}:{safe_error(fb_error)}",flush=True)
             set_status(aid,"published")
             print(f"PUBLISH_OK id={aid} media_id={result.get('id','')} type=feed_image",flush=True)
-            msg=f"✅ Publicado automaticamente no Feed\n{ai['headline']}"
+            msg=f"✅ Instagram publicado\n{ai['headline']}"
             if result.get("permalink"): msg+=f"\n🔗 {result['permalink']}"
+            if fb_result.get("status")=="published":
+                msg+="\n✅ Facebook publicado"
+            else:
+                msg+="\n⚠️ Facebook não publicou; verificar conexão da Página."
             await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,msg)
         except Exception as e:
             print(f"ARTICLE_ERROR id={aid} error={type(e).__name__}:{safe_error(e)}",flush=True)
@@ -156,6 +166,11 @@ async def startup_selftest(context:ContextTypes.DEFAULT_TYPE):
         print(f"META_CONNECTION_CHECK {meta}",flush=True)
     except Exception as e:
         print(f"META_CONNECTION_ERROR {type(e).__name__}:{safe_error(e)}",flush=True)
+    try:
+        fb=await asyncio.to_thread(check_facebook_connection)
+        print(f"FACEBOOK_CONNECTION_CHECK {fb}",flush=True)
+    except Exception as e:
+        print(f"FACEBOOK_CONNECTION_ERROR {type(e).__name__}:{safe_error(e)}",flush=True)
 
 async def visual_audit(context):
     async with SCAN_LOCK:
@@ -269,9 +284,15 @@ async def callback(update:Update,context:ContextTypes.DEFAULT_TYPE):
         result=await asyncio.to_thread(post_instagram_image,image_url,caption)
         if result.get("status")!="published":
             raise RuntimeError(str(result))
+        fb_result={"status":"skipped"}
+        try:
+            fb_result=await asyncio.to_thread(post_facebook_image,image_url,caption)
+        except Exception as fb_error:
+            print(f"FACEBOOK_PUBLISH_ERROR id={aid} error={type(fb_error).__name__}:{safe_error(fb_error)}",flush=True)
         set_status(aid,"published")
         await q.edit_message_reply_markup(reply_markup=None)
-        await q.message.reply_text(f"✅ Matéria #{aid} publicada no Feed.")
+        suffix=" e no Facebook" if fb_result.get("status")=="published" else " no Instagram; Facebook pendente"
+        await q.message.reply_text(f"✅ Matéria #{aid} publicada{suffix}.")
     except Exception as e:
         set_status(aid,"review")
         await q.message.reply_text(f"⚠️ Falha ao publicar #{aid}: {safe_error(e)}")
