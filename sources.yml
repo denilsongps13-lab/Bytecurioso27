@@ -1,25 +1,172 @@
 sources:
+  # GERAL / PRINCIPAIS NOTÍCIAS
   - name: "Rondônia - geral"
     type: rss
     url: "https://news.google.com/rss/search?q=Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
     category: geral
+
+  - name: "Porto Velho - geral"
+    type: rss
+    url: "https://news.google.com/rss/search?q=%22Porto+Velho%22&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: cidades
+
+  - name: "Interior de Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=%22Rond%C3%B4nia%22+munic%C3%ADpios&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: cidades
+
+  # POLÍTICA
   - name: "Política em Rondônia"
     type: rss
     url: "https://news.google.com/rss/search?q=pol%C3%ADtica+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
     category: politica
-  - name: "Segurança em Rondônia"
-    type: rss
-    url: "https://news.google.com/rss/search?q=pol%C3%ADcia+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
-    category: seguranca
-  - name: "Governo de Rondônia"
-    type: rss
-    url: "https://news.google.com/rss/search?q=site%3Arondonia.ro.gov.br&hl=pt-BR&gl=BR&ceid=BR:pt-419"
-    category: oficial
+
   - name: "ALE-RO"
     type: rss
     url: "https://news.google.com/rss/search?q=site%3Aal.ro.leg.br&hl=pt-BR&gl=BR&ceid=BR:pt-419"
     category: politica
+
+  - name: "Eleições Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=elei%C3%A7%C3%B5es+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: politica
+
+  # GOVERNO / OFICIAL
+  - name: "Governo de Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=site%3Arondonia.ro.gov.br&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: oficial
+
+  - name: "Prefeitura de Porto Velho"
+    type: rss
+    url: "https://news.google.com/rss/search?q=site%3Aportovelho.ro.gov.br&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: oficial
+
+  - name: "Detran Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=Detran+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: transito
+
+  # JUSTIÇA
   - name: "TJRO"
     type: rss
     url: "https://news.google.com/rss/search?q=site%3Atjro.jus.br&hl=pt-BR&gl=BR&ceid=BR:pt-419"
     category: justica
+
+  - name: "MPRO"
+    type: rss
+    url: "https://news.google.com/rss/search?q=site%3Amp.ro.gov.br&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: justica
+
+  - name: "Justiça em Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=justi%C3%A7a+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: justica
+
+  # SEGURANÇA / POLÍCIA
+  - name: "Segurança em Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=pol%C3%ADcia+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: seguranca
+
+  - name: "PRF Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=PRF+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: seguranca
+
+  - name: "Polícia Civil Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=%22Pol%C3%ADcia+Civil%22+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: seguranca
+
+  - name: "Bombeiros Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=Bombeiros+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: seguranca
+
+  # SAÚDE
+  - name: "Saúde Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=sa%C3%BAde+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: saude
+
+  - name: "Hospitais Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=hospital+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: saude
+
+  # EMPREGOS / CONCURSOS
+  - name: "Empregos Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=empregos+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: empregos
+
+  - name: "Concursos Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=concurso+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: concursos
+
+  - name: "Processos Seletivos Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=%22processo+seletivo%22+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: concursos
+
+  # EDUCAÇÃO
+  - name: "Educação Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=educa%C3%A7%C3%A3o+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: educacao
+
+  - name: "IFRO"
+    type: rss
+    url: "https://news.google.com/rss/search?q=IFRO+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: educacao
+
+  - name: "UNIR"
+    type: rss
+    url: "https://news.google.com/rss/search?q=UNIR+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: educacao
+
+  # ECONOMIA / AGRONEGÓCIO
+  - name: "Economia Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=economia+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: economia
+
+  - name: "Agronegócio Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=agroneg%C3%B3cio+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: agronegocio
+
+  # MEIO AMBIENTE / CLIMA
+  - name: "Meio ambiente Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=%22meio+ambiente%22+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: meio_ambiente
+
+  - name: "Queimadas e clima Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=queimadas+clima+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: meio_ambiente
+
+  # TECNOLOGIA / INOVAÇÃO
+  - name: "Tecnologia Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=tecnologia+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: tecnologia
+
+  - name: "Inteligência Artificial Brasil"
+    type: rss
+    url: "https://news.google.com/rss/search?q=intelig%C3%AAncia+artificial+Brasil&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: tecnologia
+
+  # ESPORTES / CULTURA / EVENTOS
+  - name: "Esportes Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=esportes+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: esportes
+
+  - name: "Eventos Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=eventos+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: eventos
