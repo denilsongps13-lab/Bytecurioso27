@@ -13,10 +13,13 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             fingerprint TEXT UNIQUE,
             source TEXT, category TEXT, title TEXT, url TEXT,
-            summary TEXT, published TEXT, ai_json TEXT,
+            summary TEXT, published TEXT, image_url TEXT, ai_json TEXT,
             status TEXT DEFAULT 'new',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )""")
+        cols=[r[1] for r in c.execute("PRAGMA table_info(articles)").fetchall()]
+        if "image_url" not in cols:
+            c.execute("ALTER TABLE articles ADD COLUMN image_url TEXT")
 
 def fp(title,url):
     return hashlib.sha256((title.strip().lower()+"|"+url.strip()).encode()).hexdigest()
@@ -24,8 +27,8 @@ def fp(title,url):
 def insert_article(a):
     try:
         with connect() as c:
-            cur=c.execute("INSERT INTO articles(fingerprint,source,category,title,url,summary,published) VALUES(?,?,?,?,?,?,?)",
-                (fp(a["title"],a["url"]),a["source"],a["category"],a["title"],a["url"],a.get("summary",""),a.get("published","")))
+            cur=c.execute("INSERT INTO articles(fingerprint,source,category,title,url,summary,published,image_url) VALUES(?,?,?,?,?,?,?,?)",
+                (fp(a["title"],a["url"]),a["source"],a["category"],a["title"],a["url"],a.get("summary",""),a.get("published",""),a.get("image_url","")))
             return cur.lastrowid
     except sqlite3.IntegrityError:
         return None
