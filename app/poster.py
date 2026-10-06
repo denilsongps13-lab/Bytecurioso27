@@ -1,6 +1,6 @@
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from pathlib import Path
-import textwrap, os
+import os
 
 MEDIA_DIR="/tmp/media"
 Path(MEDIA_DIR).mkdir(parents=True, exist_ok=True)
@@ -13,51 +13,77 @@ def _font(size):
             return ImageFont.truetype(p,size)
     return ImageFont.load_default()
 
-def _wrap(draw,text,font,maxw):
-    words=text.split()
-    lines=[]; cur=""
-    for word in words:
-        t=(cur+" "+word).strip()
-        if draw.textbbox((0,0),t,font=font)[2] <= maxw:
-            cur=t
-        else:
-            if cur: lines.append(cur)
-            cur=word
-    if cur: lines.append(cur)
-    return lines[:7]
+def _fit_lines(draw, text, max_width, start_size=108, min_size=54, max_lines=5):
+    words=text.upper().split()
+    for size in range(start_size, min_size-1, -4):
+        font=_font(size)
+        lines=[]; cur=""
+        for w in words:
+            test=(cur+" "+w).strip()
+            if draw.textbbox((0,0),test,font=font)[2] <= max_width:
+                cur=test
+            else:
+                if cur: lines.append(cur)
+                cur=w
+        if cur: lines.append(cur)
+        if len(lines) <= max_lines:
+            return font, lines
+    return _font(min_size), lines[:max_lines]
 
 def make_poster(headline, category, article_id):
-    img=Image.new("RGB",(W,H),(7,7,9))
+    img=Image.new("RGB",(W,H),(5,5,8))
     d=ImageDraw.Draw(img)
     orange=(255,112,0)
-    d.rectangle((0,0,W,38),fill=orange)
-    d.rectangle((0,H-74,W,H),fill=orange)
-    d.text((58,68),"BYTE CURIOSO 27",font=_font(64),fill=(255,135,25))
-    d.text((60,150),"RONDÔNIA • NOTÍCIAS",font=_font(31),fill=(235,235,235))
-    d.rectangle((58,220,W-58,228),fill=orange)
-    f=_font(88); y=315
-    for i,line in enumerate(_wrap(d,headline.upper(),f,W-116)):
-        d.text((58,y),line,font=f,fill=orange if i%2==0 else (245,245,245),
-               stroke_width=2,stroke_fill=(0,0,0))
-        y += 108
-    d.text((60,H-170),f"CATEGORIA: {category.upper()}",font=_font(30),fill=(200,200,200))
-    d.text((58,H-58),"@bytecurioso27",font=_font(36),fill=(10,10,10))
+    white=(245,245,245)
+    blue=(0,145,255)
+
+    # cyber frame / glow
+    d.rectangle((0,0,W,46),fill=orange)
+    d.rectangle((0,H-82,W,H),fill=orange)
+    d.rectangle((26,26,W-26,H-26),outline=(110,45,0),width=3)
+    for x in range(0,W,135):
+        d.line((x,0,x+220,220),fill=(55,24,0),width=3)
+    for y in range(160,H,190):
+        d.line((0,y,170,y+70),fill=(45,22,0),width=2)
+
+    # top brand band
+    d.rounded_rectangle((55,55,W-55,190),radius=24,fill=(12,12,18),outline=orange,width=4)
+    d.text((85,80),"BYTE CURIOSO 27",font=_font(56),fill=white)
+    d.text((735,91),"NEWS",font=_font(44),fill=orange)
+
+    # mascot-like abstract silhouette + tech orb
+    d.ellipse((68,235,340,507),fill=(20,20,26),outline=orange,width=7)
+    d.ellipse((122,285,180,343),fill=orange)
+    d.ellipse((225,285,283,343),fill=orange)
+    d.arc((70,220,345,520),start=210,end=330,fill=orange,width=9)
+    d.ellipse((760,240,1015,495),outline=blue,width=7)
+    d.arc((775,255,1000,480),0,360,fill=orange,width=4)
+    d.line((788,365,990,365),fill=blue,width=3)
+    d.line((883,255,883,480),fill=blue,width=3)
+
+    # category chip
+    chip=f"NOTÍCIA • {category.upper()}"
+    d.rounded_rectangle((70,545,W-70,620),radius=18,fill=(12,12,18),outline=orange,width=3)
+    d.text((95,562),chip,font=_font(33),fill=orange)
+
+    # headline
+    font, lines=_fit_lines(d,headline,W-120,108,54,5)
+    y=665
+    for i,line in enumerate(lines):
+        fill=orange if i in (0,2) else white
+        bbox=d.textbbox((0,0),line,font=font)
+        tw=bbox[2]-bbox[0]
+        x=(W-tw)//2
+        d.text((x,y),line,font=font,fill=fill,stroke_width=3,stroke_fill=(0,0,0))
+        y += int(font.size*1.05)
+
+    # footer
+    d.rounded_rectangle((245,H-150,835,H-95),radius=25,fill=(10,10,14),outline=orange,width=3)
+    d.text((310,H-142),"@bytecurioso27",font=_font(35),fill=orange)
+
     path=f"{MEDIA_DIR}/post_{article_id}.jpg"
     img.save(path,quality=94)
     return path
 
 def make_test_poster():
-    img=Image.new("RGB",(W,H),(7,7,9))
-    d=ImageDraw.Draw(img)
-    orange=(255,112,0)
-    d.rectangle((0,0,W,40),fill=orange)
-    d.text((70,130),"BYTE CURIOSO 27",font=_font(72),fill=orange)
-    d.text((70,310),"CONEXÃO",font=_font(120),fill=(245,245,245))
-    d.text((70,445),"AUTOMÁTICA",font=_font(115),fill=orange)
-    d.text((70,650),"TESTE DO SISTEMA",font=_font(68),fill=(245,245,245))
-    d.text((70,760),"Instagram conectado ao robô",font=_font(42),fill=(200,200,200))
-    d.rectangle((0,H-78,W,H),fill=orange)
-    d.text((70,H-62),"@bytecurioso27",font=_font(38),fill=(10,10,10))
-    path=f"{MEDIA_DIR}/instagram_test.jpg"
-    img.save(path,quality=94)
-    return path
+    return make_poster("CONEXÃO AUTOMÁTICA COM O INSTAGRAM ATIVADA","teste","instagram_test")
