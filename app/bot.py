@@ -73,7 +73,7 @@ async def scan_job(context: ContextTypes.DEFAULT_TYPE):
         from app.db import set_ai
         set_ai(a["id"],ai)
         if config.META_ENABLED:
-            poster=make_poster(ai["headline"],a["category"],a["id"],a.get("image_url",""))
+            poster=make_poster(ai["headline"],a["category"],a["id"],a.get("image_url",""),a.get("source",""))
             reel=make_reel_from_poster(poster,a["id"])
             video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
             try:
@@ -143,7 +143,7 @@ async def callback(update:Update,context:ContextTypes.DEFAULT_TYPE):
         category=a.get("category") or "notícia"
         caption=ai.get("caption_instagram") or a.get("title") or ""
         try:
-            poster=make_poster(headline,category,aid,a.get("image_url",""))
+            poster=make_poster(headline,category,aid,a.get("image_url",""),a.get("source",""))
             reel=make_reel_from_poster(poster,aid)
             video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
             result=await asyncio.to_thread(post_instagram_reel,video_url,caption)
