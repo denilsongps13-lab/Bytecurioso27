@@ -1,31 +1,48 @@
-import time
+import time,re
 import requests
 from app import config
 
 def _endpoint(path):
     return f"https://graph.instagram.com/{path.lstrip('/')}"
 
+def safe_error(value):
+    text=str(value)
+    for key in ('META_ACCESS_TOKEN','TELEGRAM_BOT_TOKEN','GEMINI_API_KEY','OPENAI_API_KEY'):
+        secret=getattr(config,key,'')
+        if secret: text=text.replace(secret,'[REDACTED]')
+    return re.sub(r'(access_token(?:=|%3D))[^&\s]+',r'\1[REDACTED]',text,flags=re.I)
+
 def _wait_until_ready(creation_id, timeout_seconds=90, poll_seconds=3):
     deadline=time.time()+timeout_seconds
     last={}
     while time.time() < deadline:
-        r=requests.get(
-            _endpoint(creation_id),
+        try:
+            r=requests.get(
+                _endpoint(creation_id),
             params={
                 "fields":"status_code,status",
                 "access_token":config.META_ACCESS_TOKEN,
             },
-            timeout=30,
-        )
-        r.raise_for_status()
+                timeout=30,
+            )
+        except requests.RequestException:
+            print('META_STATUS_RETRY reason=network',flush=True)
+            time.sleep(poll_seconds)
+            continue
+        if r.status_code==429 or r.status_code>=500:
+            print(f'META_STATUS_RETRY http={r.status_code}',flush=True)
+            time.sleep(poll_seconds)
+            continue
+        if not r.ok:
+            raise RuntimeError(f'Meta status check failed HTTP {r.status_code}: {safe_error(r.text[:500])}')
         last=r.json()
         status=(last.get("status_code") or last.get("status") or "").upper()
         if status=="FINISHED":
             return last
         if status=="ERROR":
-            raise RuntimeError(f"Instagram media processing failed: {last}")
+            raise RuntimeError(f"Instagram media processing failed: {safe_error(last)}")
         time.sleep(poll_seconds)
-    raise TimeoutError(f"Instagram media processing timeout. Last status: {last}")
+    raise TimeoutError(f"Instagram media processing timeout. Last status: {safe_error(last)}")
 
 def post_instagram_image(image_url, caption):
     if not (config.META_ENABLED and config.META_ACCESS_TOKEN and config.INSTAGRAM_USER_ID):
@@ -41,7 +58,7 @@ def post_instagram_image(image_url, caption):
         timeout=60,
     )
     if not create.ok:
-        raise RuntimeError(f"Instagram media create failed ({create.status_code}): {create.text[:500]}")
+        raise RuntimeError(f"Instagram media create failed ({create.status_code}): {safe_error(create.text[:500])}")
     cid=create.json()["id"]
 
     _wait_until_ready(cid)
@@ -55,7 +72,7 @@ def post_instagram_image(image_url, caption):
         timeout=60,
     )
     if not publish.ok:
-        raise RuntimeError(f"Instagram media publish failed ({publish.status_code}): {publish.text[:500]}")
+        raise RuntimeError(f"Instagram media publish failed ({publish.status_code}): {safe_error(publish.text[:500])}")
     media_id=publish.json().get("id","")
     permalink=""
     if media_id:
@@ -88,7 +105,7 @@ def post_instagram_reel(video_url, caption):
         timeout=60,
     )
     if not create.ok:
-        raise RuntimeError(f"Instagram Reel create failed ({create.status_code}): {create.text[:500]}")
+        raise RuntimeError(f"Instagram Reel create failed ({create.status_code}): {safe_error(create.text[:500])}")
     cid=create.json()["id"]
 
     _wait_until_ready(cid, timeout_seconds=180, poll_seconds=4)
@@ -102,7 +119,7 @@ def post_instagram_reel(video_url, caption):
         timeout=60,
     )
     if not publish.ok:
-        raise RuntimeError(f"Instagram Reel publish failed ({publish.status_code}): {publish.text[:500]}")
+        raise RuntimeError(f"Instagram Reel publish failed ({publish.status_code}): {safe_error(publish.text[:500])}")
 
     media_id=publish.json().get("id","")
     permalink=""

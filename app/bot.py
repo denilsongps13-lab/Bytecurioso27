@@ -7,7 +7,7 @@ from app.fetcher import scan_sources,enrich_image,valid_story,classify_category
 from app.editor import prepare,public_title,finish_caption
 from app.poster import make_poster,make_test_poster,asset_status
 from app.reels import make_reel_from_poster
-from app.publishers.meta import post_instagram_reel,recent_marker_exists,check_instagram_connection
+from app.publishers.meta import post_instagram_reel,recent_marker_exists,check_instagram_connection,safe_error
 
 SCAN_LOCK=asyncio.Lock()
 
@@ -136,10 +136,10 @@ async def _scan_job(context):
             if result.get("permalink"): msg+=f"\n🔗 {result['permalink']}"
             await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,msg)
         except Exception as e:
-            print(f"ARTICLE_ERROR id={aid} error={type(e).__name__}:{e}",flush=True)
+            print(f"ARTICLE_ERROR id={aid} error={type(e).__name__}:{safe_error(e)}",flush=True)
             set_status(aid,"review")
             try:
-                await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,f"⚠️ Falha na matéria #{aid}: {e}")
+                await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,f"⚠️ Falha na matéria #{aid}: {safe_error(e)}")
             except Exception:
                 pass
 
@@ -151,12 +151,12 @@ async def startup_selftest(context:ContextTypes.DEFAULT_TYPE):
         size=__import__("os").path.getsize(reel)
         print(f"REEL_SELFTEST_OK bytes={size}",flush=True)
     except Exception as e:
-        print(f"REEL_SELFTEST_ERROR {type(e).__name__}:{e}",flush=True)
+        print(f"REEL_SELFTEST_ERROR {type(e).__name__}:{safe_error(e)}",flush=True)
     try:
         meta=await asyncio.to_thread(check_instagram_connection)
         print(f"META_CONNECTION_CHECK {meta}",flush=True)
     except Exception as e:
-        print(f"META_CONNECTION_ERROR {type(e).__name__}:{e}",flush=True)
+        print(f"META_CONNECTION_ERROR {type(e).__name__}:{safe_error(e)}",flush=True)
 
 async def visual_audit(context):
     async with SCAN_LOCK:
@@ -278,14 +278,14 @@ async def callback(update:Update,context:ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text(f"✅ Matéria #{aid} publicada.")
     except Exception as e:
         set_status(aid,"review")
-        await q.message.reply_text(f"⚠️ Falha ao publicar #{aid}: {e}")
+        await q.message.reply_text(f"⚠️ Falha ao publicar #{aid}: {safe_error(e)}")
 
 async def bot_error_handler(update,context):
     err=context.error
     if err and err.__class__.__name__=="Conflict":
         print("TELEGRAM_POLLING_HANDOFF",flush=True)
         return
-    print(f"TELEGRAM_ERROR {type(err).__name__}:{err}",flush=True)
+    print(f"TELEGRAM_ERROR {type(err).__name__}:{safe_error(err)}",flush=True)
 
 def run():
     init_db()
