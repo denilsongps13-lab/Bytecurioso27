@@ -125,16 +125,14 @@ def make_poster(headline,category,article_id,image_url='',source=''):
     label='RONDÔNIA NEWS  •  '+CATEGORIES.get(key,(category or 'GERAL').upper())
     font,lines=_fit(d,label,910,65,36,18)
     d.text((W//2,1027),label,font=font,fill=WHITE,anchor='mm')
-    text=' '.join((headline or '').split()).upper()
+    from app.editor import public_title
+    text=' '.join(public_title({'title':headline or '', 'source':source}).split()).upper()
     if not text: raise ValueError('POSTER_ERROR empty_headline')
     font,lines=_fit(d,text,910,570)
     y=1110+(570-len(lines)*(font.size+12))//2
     for i,line in enumerate(lines):
         d.text((W//2,y),line,font=font,fill=ORANGE if i%2==0 else WHITE,anchor='mt',stroke_width=2,stroke_fill=(0,0,0))
         y+=font.size+12
-    src='FONTE: '+(source or 'Fonte não informada').strip()
-    sf,sl=_fit(d,src,900,85,26,18)
-    for i,line in enumerate(sl): d.text((W//2,1710+i*(sf.size+8)),line,font=sf,fill=WHITE,anchor='mt',stroke_width=1,stroke_fill=(0,0,0))
     d.text((W//2,1855),'BYTE CURIOSO 27 NEWS',font=_font(24),fill=WHITE,anchor='mm',stroke_width=1,stroke_fill=(0,0,0))
     safe=re.sub(r'[^A-Za-z0-9_-]','_',str(article_id))
     path=Path(MEDIA_DIR)/f'post_{safe}.jpg'; tmp=path.with_suffix('.tmp')

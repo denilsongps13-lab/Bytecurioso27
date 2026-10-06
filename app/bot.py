@@ -4,7 +4,7 @@ from telegram.ext import Application,CommandHandler,CallbackQueryHandler,Context
 from app import config
 from app.db import init_db,get_article,pending,set_status,queued_articles,fp,claim_article
 from app.fetcher import scan_sources,enrich_image,valid_story,classify_category
-from app.editor import prepare
+from app.editor import prepare,public_title,finish_caption
 from app.poster import make_poster,make_test_poster,asset_status
 from app.reels import make_reel_from_poster
 from app.publishers.meta import post_instagram_reel,recent_marker_exists,check_instagram_connection
@@ -23,14 +23,14 @@ def kb(aid):
                                   InlineKeyboardButton("❌ DESCARTAR",callback_data=f"drop:{aid}")]])
 
 async def send_preview(bot,chat_id,a,ai):
-    txt=f"📰 <b>{html.escape(ai['headline'])}</b>\n\nLegenda completa enviada abaixo."
+    txt=f"📰 <b>{html.escape(public_title(a))}</b>\n\nLegenda completa enviada abaixo."
     poster=await asyncio.to_thread(
         make_poster,ai["headline"],a.get("category","notícia"),
         f"preview_{a['id']}",a.get("image_url",""),a.get("source","")
     )
     with open(poster,"rb") as f:
         await bot.send_photo(chat_id=chat_id,photo=f,caption=txt,parse_mode="HTML",reply_markup=kb(a["id"]))
-    caption=ai['caption_instagram']
+    caption=finish_caption(a,ai['caption_instagram'])
     await bot.send_message(chat_id=chat_id,text=caption,reply_markup=kb(a['id']),disable_web_page_preview=True)
     print(f"PREVIEW_CAPTION_OK id={a['id']} chars={len(caption)}",flush=True)
     print(f"PREVIEW_IMAGE_OK id={a['id']}",flush=True)
@@ -126,7 +126,7 @@ async def _scan_job(context):
             poster=await asyncio.to_thread(make_poster,ai["headline"],a["category"],aid,a.get("image_url",""),a.get("source",""))
             reel=await asyncio.to_thread(make_reel_from_poster,poster,aid)
             video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
-            caption=(ai["caption_instagram"]+"\n\n"+marker).strip()
+            caption=(finish_caption(a,ai["caption_instagram"])+"\n\n"+marker).strip()
             result=await asyncio.to_thread(post_instagram_reel,video_url,caption)
             if result.get("status")!="published":
                 raise RuntimeError(f"Meta não publicou: {result}")
@@ -266,7 +266,7 @@ async def callback(update:Update,context:ContextTypes.DEFAULT_TYPE):
             return
         ai=json.loads(a.get("ai_json") or "{}")
         headline=a.get("title") or "Byte Curioso 27"
-        caption=ai.get("caption_instagram") or a.get("title") or ""
+        caption=finish_caption(a,ai.get("caption_instagram") or a.get("title") or "")
         poster=await asyncio.to_thread(make_poster,headline,a.get("category") or "notícia",aid,a.get("image_url",""),a.get("source",""))
         reel=await asyncio.to_thread(make_reel_from_poster,poster,aid)
         video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
