@@ -229,7 +229,8 @@ def run():
     app.add_handler(CommandHandler("status",status))
     app.add_handler(CommandHandler("testinstagram",testinstagram))
     app.add_handler(CallbackQueryHandler(callback))
-    app.job_queue.run_once(startup_selftest,when=5)\n    app.job_queue.run_repeating(scan_job,interval=config.SCAN_INTERVAL_MINUTES*60,first=20)
+    app.job_queue.run_once(startup_selftest,when=5)
+    app.job_queue.run_repeating(scan_job,interval=config.SCAN_INTERVAL_MINUTES*60,first=20)
     app.run_polling(drop_pending_updates=True)
 
 if __name__=="__main__":
