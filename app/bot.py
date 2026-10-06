@@ -231,7 +231,8 @@ def run():
     init_db()
     if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_OWNER_CHAT_ID:
         raise SystemExit("Configure TELEGRAM_BOT_TOKEN e TELEGRAM_OWNER_CHAT_ID")
-    app=Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()\n    app.add_error_handler(bot_error_handler)
+    app=Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+    app.add_error_handler(bot_error_handler)
     app.add_handler(CommandHandler("start",start))
     app.add_handler(CommandHandler("buscar",buscar))
     app.add_handler(CommandHandler("pendentes",pendentes_cmd))
