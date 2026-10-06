@@ -19,3 +19,5 @@ INSTAGRAM_USER_ID = os.getenv("INSTAGRAM_USER_ID","")
 FACEBOOK_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID","")
 TIKTOK_ENABLED = env_bool("TIKTOK_ENABLED", False)
 TIKTOK_ACCESS_TOKEN = os.getenv("TIKTOK_ACCESS_TOKEN","")
+
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL","https://bytecurioso27-news.onrender.com").rstrip("/")
