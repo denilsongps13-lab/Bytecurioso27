@@ -22,6 +22,10 @@ async def scan_job(context: ContextTypes.DEFAULT_TYPE):
     rows=await asyncio.to_thread(scan_sources)
     for a in rows[:config.MAX_POSTS_PER_CYCLE]:
         ai=await asyncio.to_thread(prepare,a)
+        if isinstance(ai, list):
+            ai = ai[0] if ai else {}
+        if not isinstance(ai, dict):
+            ai = {"headline":a["title"].upper(),"caption_instagram":a["title"],"caption_tiktok":a["title"],"short_script":a["title"],"risk":"high","reason":"Formato inesperado da IA","hashtags":["#Rondonia","#ByteCurioso27"]}
         from app.db import set_ai
         set_ai(a["id"],ai)
         if ai.get("risk")=="low" and config.AUTO_PUBLISH_LOW_RISK and config.META_ENABLED:
