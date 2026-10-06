@@ -35,12 +35,17 @@ TÍTULO: {a['title']}
 RESUMO: {a.get('summary','')}
 LINK: {a['url']}
 """
-    url=f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+    url=f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
     payload={
         "contents":[{"parts":[{"text":prompt}]}],
         "generationConfig":{"responseMimeType":"application/json","temperature":0.2}
     }
-    r=requests.post(url,json=payload,timeout=60)
+    r=requests.post(
+        url,
+        headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type":"application/json"},
+        json=payload,
+        timeout=60
+    )
     r.raise_for_status()
     data=r.json()
     txt=data["candidates"][0]["content"]["parts"][0]["text"]
@@ -63,6 +68,7 @@ def prepare(a):
             return _prepare_openai(a)
     except Exception as e:
         out=fallback(a)
-        out["reason"]=f"Erro na IA: {str(e)[:160]}"
+        status=getattr(getattr(e,"response",None),"status_code",None)
+        out["reason"]=f"Erro na IA{f' (HTTP {status})' if status else ''}. Verifique a chave/modelo do Gemini."
         return out
     return fallback(a)
