@@ -38,7 +38,10 @@ SELO=_decode_asset("assets/selo_bc27.jpg.b64","selo.jpg")
 def _circle_crop(path,size):
     if not path or not Path(path).exists():
         return None
-    im=Image.open(path).convert("RGB").resize((size,size))
+    try:
+        im=Image.open(path).convert("RGB").resize((size,size))
+    except Exception:
+        return None
     mask=Image.new("L",(size,size),0)
     md=ImageDraw.Draw(mask)
     md.ellipse((0,0,size,size),fill=255)
