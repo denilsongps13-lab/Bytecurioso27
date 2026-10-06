@@ -3,7 +3,7 @@ from telegram import InlineKeyboardButton,InlineKeyboardMarkup,Update
 from telegram.ext import Application,CommandHandler,CallbackQueryHandler,ContextTypes
 from app import config
 from app.db import init_db,get_article,pending,set_status,queued_articles
-from app.fetcher import scan_sources
+from app.fetcher import scan_sources,enrich_image
 from app.editor import prepare
 from app.poster import make_poster, make_test_poster
 from app.reels import make_reel_from_poster
@@ -58,10 +58,13 @@ def _select_for_cycle(rows, limit=3):
     return chosen
 
 async def scan_job(context: ContextTypes.DEFAULT_TYPE):
-    await asyncio.to_thread(scan_sources)
+    print("SCAN_START", flush=True)
+    added=await asyncio.to_thread(scan_sources)
     rows=await asyncio.to_thread(queued_articles,100)
     selected=_select_for_cycle(rows,3)
+    print(f"SCAN_FOUND added={len(added)} queued={len(rows)} selected={len(selected)}", flush=True)
     for a in selected:
+        a=await asyncio.to_thread(enrich_image,a)
         ai=await asyncio.to_thread(prepare,a)
         if isinstance(ai, list):
             ai = ai[0] if ai else {}
@@ -74,13 +77,16 @@ async def scan_job(context: ContextTypes.DEFAULT_TYPE):
             reel=make_reel_from_poster(poster,a["id"])
             video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
             try:
+                print(f"PUBLISH_START id={a['id']} category={a.get('category','')}", flush=True)
                 result=await asyncio.to_thread(post_instagram_reel,video_url,ai["caption_instagram"])
                 set_status(a["id"],"published")
+                print(f"PUBLISH_OK id={a['id']} media_id={result.get('id','')}", flush=True)
                 msg=f"✅ Publicado automaticamente em Reels\n{ai['headline']}\nID: {result.get('id','')}"
                 if result.get("permalink"):
                     msg+=f"\n🔗 {result['permalink']}"
                 await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,msg)
             except Exception as e:
+                print(f"PUBLISH_ERROR id={a['id']} error={e}", flush=True)
                 set_status(a["id"],"review")
                 await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,f"⚠️ Falha ao publicar automaticamente: {e}")
         else:
