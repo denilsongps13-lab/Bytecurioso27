@@ -1,0 +1,25 @@
+sources:
+  - name: "Rondônia - geral"
+    type: rss
+    url: "https://news.google.com/rss/search?q=Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: geral
+  - name: "Política em Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=pol%C3%ADtica+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: politica
+  - name: "Segurança em Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=pol%C3%ADcia+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: seguranca
+  - name: "Governo de Rondônia"
+    type: rss
+    url: "https://news.google.com/rss/search?q=site%3Arondonia.ro.gov.br&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: oficial
+  - name: "ALE-RO"
+    type: rss
+    url: "https://news.google.com/rss/search?q=site%3Aal.ro.leg.br&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: politica
+  - name: "TJRO"
+    type: rss
+    url: "https://news.google.com/rss/search?q=site%3Atjro.jus.br&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+    category: justica
