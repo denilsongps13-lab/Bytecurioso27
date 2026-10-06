@@ -7,7 +7,7 @@ from app.fetcher import scan_sources,enrich_image
 from app.editor import prepare
 from app.poster import make_poster,make_test_poster,asset_status
 from app.reels import make_reel_from_poster
-from app.publishers.meta import post_instagram_reel,recent_marker_exists
+from app.publishers.meta import post_instagram_reel,recent_marker_exists,check_instagram_connection
 
 def kb(aid):
     return InlineKeyboardMarkup([[InlineKeyboardButton("✅ PUBLICAR",callback_data=f"pub:{aid}"),
@@ -119,6 +119,21 @@ async def scan_job(context:ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
 
+
+async def startup_selftest(context:ContextTypes.DEFAULT_TYPE):
+    try:
+        poster=await asyncio.to_thread(make_test_poster)
+        reel=await asyncio.to_thread(make_reel_from_poster,poster,"selftest_v2")
+        size=__import__("os").path.getsize(reel)
+        print(f"REEL_SELFTEST_OK bytes={size}",flush=True)
+    except Exception as e:
+        print(f"REEL_SELFTEST_ERROR {type(e).__name__}:{e}",flush=True)
+    try:
+        meta=await asyncio.to_thread(check_instagram_connection)
+        print(f"META_CONNECTION_CHECK {meta}",flush=True)
+    except Exception as e:
+        print(f"META_CONNECTION_ERROR {type(e).__name__}:{e}",flush=True)
+
 async def start(update:Update,context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🗞 Byte Curioso 27 ativo.\n/buscar /testarte /status /pendentes")
 
@@ -214,7 +229,7 @@ def run():
     app.add_handler(CommandHandler("status",status))
     app.add_handler(CommandHandler("testinstagram",testinstagram))
     app.add_handler(CallbackQueryHandler(callback))
-    app.job_queue.run_repeating(scan_job,interval=config.SCAN_INTERVAL_MINUTES*60,first=15)
+    app.job_queue.run_once(startup_selftest,when=5)\n    app.job_queue.run_repeating(scan_job,interval=config.SCAN_INTERVAL_MINUTES*60,first=20)
     app.run_polling(drop_pending_updates=True)
 
 if __name__=="__main__":
