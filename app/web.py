@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
+from fastapi.staticfiles import StaticFiles\nfrom fastapi.responses import FileResponse\nfrom app.poster import make_test_poster
 from pathlib import Path
 
 MEDIA_DIR="/tmp/media"
@@ -15,3 +15,8 @@ def root():
 @app.get("/health")
 def health():
     return {"ok":True}
+
+
+@app.get("/preview/test.jpg")
+def preview_test():
+    return FileResponse(make_test_poster(), media_type="image/jpeg")
