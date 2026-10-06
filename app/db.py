@@ -50,3 +50,17 @@ def pending(limit=20):
     with connect() as c:
         rows=c.execute("SELECT * FROM articles WHERE status IN ('prepared','review') ORDER BY id DESC LIMIT ?",(limit,)).fetchall()
         return [dict(r) for r in rows]
+
+
+def queued_articles(limit=100):
+    with connect() as c:
+        rows=c.execute("""
+            SELECT * FROM articles
+            WHERE status='new'
+            ORDER BY
+              CASE WHEN published IS NULL OR published='' THEN 1 ELSE 0 END,
+              created_at DESC,
+              id DESC
+            LIMIT ?
+        """,(limit,)).fetchall()
+        return [dict(r) for r in rows]
