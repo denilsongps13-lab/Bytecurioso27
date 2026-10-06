@@ -29,20 +29,22 @@ async def scan_job(context: ContextTypes.DEFAULT_TYPE):
             ai = {"headline":a["title"].upper(),"caption_instagram":a["title"],"caption_tiktok":a["title"],"short_script":a["title"],"risk":"high","reason":"Formato inesperado da IA","hashtags":["#Rondonia","#ByteCurioso27"]}
         from app.db import set_ai
         set_ai(a["id"],ai)
-        if ai.get("risk")=="low" and config.AUTO_PUBLISH_LOW_RISK and config.META_ENABLED:
+        if config.META_ENABLED:
             poster=make_poster(ai["headline"],a["category"],a["id"],a.get("image_url",""))
             reel=make_reel_from_poster(poster,a["id"])
             video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
             try:
                 result=await asyncio.to_thread(post_instagram_reel,video_url,ai["caption_instagram"])
                 set_status(a["id"],"published")
-                await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,f"✅ Publicado no Instagram\n{ai['headline']}\nID: {result.get('id','')}")
+                msg=f"✅ Publicado automaticamente em Reels\n{ai['headline']}\nID: {result.get('id','')}"
+                if result.get("permalink"):
+                    msg+=f"\n🔗 {result['permalink']}"
+                await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,msg)
             except Exception as e:
                 set_status(a["id"],"review")
                 await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,f"⚠️ Falha ao publicar automaticamente: {e}")
-                await send_preview(context.bot,config.TELEGRAM_OWNER_CHAT_ID,a,ai)
         else:
-            set_status(a["id"],"review" if ai.get("risk")=="high" else "prepared")
+            set_status(a["id"],"prepared")
             await send_preview(context.bot,config.TELEGRAM_OWNER_CHAT_ID,a,ai)
 
 async def start(update:Update,context:ContextTypes.DEFAULT_TYPE):
