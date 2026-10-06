@@ -5,9 +5,15 @@ from app import config
 def _endpoint(path):
     return f"https://graph.instagram.com/{path.lstrip('/')}"
 
+def _fb_endpoint(path):
+    return f"https://graph.facebook.com/{config.META_GRAPH_VERSION}/{path.lstrip('/')}"
+
+def _facebook_token():
+    return config.FACEBOOK_PAGE_ACCESS_TOKEN or config.META_ACCESS_TOKEN
+
 def safe_error(value):
     text=str(value)
-    for key in ('META_ACCESS_TOKEN','TELEGRAM_BOT_TOKEN','GEMINI_API_KEY','OPENAI_API_KEY'):
+    for key in ('META_ACCESS_TOKEN','FACEBOOK_PAGE_ACCESS_TOKEN','TELEGRAM_BOT_TOKEN','GEMINI_API_KEY','OPENAI_API_KEY'):
         secret=getattr(config,key,'')
         if secret: text=text.replace(secret,'[REDACTED]')
     return re.sub(r'(access_token(?:=|%3D))[^&\s]+',r'\1[REDACTED]',text,flags=re.I)
@@ -179,3 +185,37 @@ def check_instagram_connection():
     data=r.json()
     return {"ok":data.get("username","").lower()=="bytecurioso27" and str(data.get("id",""))==str(config.INSTAGRAM_USER_ID),"id":data.get("id",""),"username":data.get("username",""),"account_type":data.get("account_type","")}
 
+
+
+def check_facebook_connection():
+    token=_facebook_token()
+    if not (token and config.FACEBOOK_PAGE_ID):
+        return {"ok":False,"reason":"credenciais_ausentes"}
+    r=requests.get(
+        _fb_endpoint(config.FACEBOOK_PAGE_ID),
+        params={"fields":"id,name","access_token":token},
+        timeout=30,
+    )
+    if not r.ok:
+        return {"ok":False,"status_code":r.status_code,"error":safe_error(r.text[:300])}
+    data=r.json()
+    return {"ok":str(data.get("id",""))==str(config.FACEBOOK_PAGE_ID),"id":data.get("id",""),"name":data.get("name","")}
+
+def post_facebook_image(image_url, caption):
+    token=_facebook_token()
+    if not (config.META_ENABLED and token and config.FACEBOOK_PAGE_ID):
+        return {"status":"skipped","reason":"Facebook não configurado"}
+    r=requests.post(
+        _fb_endpoint(f"{config.FACEBOOK_PAGE_ID}/photos"),
+        data={
+            "url":image_url,
+            "message":caption,
+            "published":"true",
+            "access_token":token,
+        },
+        timeout=90,
+    )
+    if not r.ok:
+        raise RuntimeError(f"Facebook photo publish failed ({r.status_code}): {safe_error(r.text[:500])}")
+    data=r.json()
+    return {"status":"published","id":data.get("post_id") or data.get("id","")}
