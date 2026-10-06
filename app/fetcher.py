@@ -43,9 +43,9 @@ def scan_sources():
         feed=feedparser.parse(s["url"])
         for e in feed.entries[:10]:
             url=getattr(e,"link","").strip()
+            # Keep the bulk scan fast. Do not open every article page here.
+            # The selected stories can resolve an OG image lazily before publishing.
             image_url=_feed_image(e)
-            if not image_url and url:
-                image_url=_og_image(url)
             a={
                 "source":s["name"],
                 "category":s.get("category","geral"),
@@ -61,3 +61,13 @@ def scan_sources():
                     a["id"]=aid
                     added.append(a)
     return added
+
+
+def enrich_image(article):
+    """Resolve a source image only for a story that is actually going to be published."""
+    if article.get("image_url"):
+        return article
+    url=(article.get("url") or "").strip()
+    if url:
+        article["image_url"]=_og_image(url)
+    return article
