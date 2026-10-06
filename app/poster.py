@@ -124,8 +124,19 @@ def make_poster(headline,category,article_id,image_url="",source=""):
         img.paste(hero,(0,0))
     else:
         d=ImageDraw.Draw(img)
-        d.rectangle((0,0,W,hero_h),fill=(24,29,36))
-        d.text((W//2,510),"BYTE CURIOSO 27",font=_font(58),fill=(100,105,114),anchor="mm")
+        # Professional newsroom-style fallback when the source has no usable photo.
+        d.rectangle((0,0,W,hero_h),fill=(18,22,29))
+        for y in range(hero_h):
+            shade=int(18 + 22*(y/hero_h))
+            d.line((0,y,W,y),fill=(shade,shade+3,shade+8))
+        for x in range(-300,1300,180):
+            d.polygon([(x,0),(x+170,0),(x-260,hero_h),(x-430,hero_h)],fill=(22,28,38))
+        d.ellipse((690,190,1160,660),fill=(24,34,48))
+        d.ellipse((760,250,1090,580),outline=ORANGE,width=8)
+        d.text((W//2,465),"BYTE CURIOSO 27",font=_font(72),fill=WHITE,anchor="mm")
+        d.text((W//2,545),"RONDÔNIA EM TEMPO REAL",font=_font(28),fill=MUTED,anchor="mm")
+        d.rounded_rectangle((360,620,720,692),radius=24,fill=ORANGE)
+        d.text((W//2,656),"NOTÍCIA EM DESTAQUE",font=_font(25),fill=(20,20,22),anchor="mm")
 
     # Dark fade from photo into headline area
     fade=Image.new("RGBA",(W,520),(0,0,0,0))
