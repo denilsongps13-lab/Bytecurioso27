@@ -6,7 +6,8 @@ from app.db import init_db,get_article,pending,set_status
 from app.fetcher import scan_sources
 from app.editor import prepare
 from app.poster import make_poster, make_test_poster
-from app.publishers.meta import post_instagram_image
+from app.reels import make_reel_from_poster
+from app.publishers.meta import post_instagram_reel
 
 def kb(aid):
     return InlineKeyboardMarkup([[InlineKeyboardButton("✅ PUBLICAR",callback_data=f"pub:{aid}"),
@@ -30,9 +31,10 @@ async def scan_job(context: ContextTypes.DEFAULT_TYPE):
         set_ai(a["id"],ai)
         if ai.get("risk")=="low" and config.AUTO_PUBLISH_LOW_RISK and config.META_ENABLED:
             poster=make_poster(ai["headline"],a["category"],a["id"])
-            image_url=f"{config.PUBLIC_BASE_URL}/media/{poster.split('/')[-1]}"
+            reel=make_reel_from_poster(poster,a["id"])
+            video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
             try:
-                result=await asyncio.to_thread(post_instagram_image,image_url,ai["caption_instagram"])
+                result=await asyncio.to_thread(post_instagram_reel,video_url,ai["caption_instagram"])
                 set_status(a["id"],"published")
                 await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,f"✅ Publicado no Instagram\n{ai['headline']}\nID: {result.get('id','')}")
             except Exception as e:
@@ -58,9 +60,10 @@ async def pendentes_cmd(update:Update,context:ContextTypes.DEFAULT_TYPE):
 async def testinstagram(update:Update,context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🧪 Testando publicação no Instagram...")
     poster=make_test_poster()
-    image_url=f"{config.PUBLIC_BASE_URL}/media/{poster.split('/')[-1]}"
+    reel=make_reel_from_poster(poster,"instagram_test")
+    video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
     try:
-        result=await asyncio.to_thread(post_instagram_image,image_url,"🧪 Teste automático do Byte Curioso 27. Sistema de publicação conectado. #ByteCurioso27 #Rondonia")
+        result=await asyncio.to_thread(post_instagram_reel,video_url,"🧪 Teste automático do Byte Curioso 27 em Reels. #ByteCurioso27 #Rondonia")
         link=result.get("permalink","")
         msg=f"✅ Teste publicado no Instagram. ID: {result.get('id','')}"
         if link:
@@ -84,9 +87,27 @@ async def callback(update:Update,context:ContextTypes.DEFAULT_TYPE):
         await q.edit_message_reply_markup(reply_markup=None)
         await q.message.reply_text(f"❌ Matéria #{aid} descartada.")
     else:
-        set_status(aid,"approved")
-        await q.edit_message_reply_markup(reply_markup=None)
-        await q.message.reply_text(f"✅ Matéria #{aid} aprovada. Publicação nas redes entra na próxima etapa.")
+        try:
+            ai=json.loads(a.get("ai_json") or "{}") if isinstance(a,dict) else {}
+        except Exception:
+            ai={}
+        headline=ai.get("headline") or a.get("title") or "Byte Curioso 27"
+        category=a.get("category") or "notícia"
+        caption=ai.get("caption_instagram") or a.get("title") or ""
+        try:
+            poster=make_poster(headline,category,aid)
+            reel=make_reel_from_poster(poster,aid)
+            video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
+            result=await asyncio.to_thread(post_instagram_reel,video_url,caption)
+            set_status(aid,"published")
+            await q.edit_message_reply_markup(reply_markup=None)
+            msg=f"✅ Matéria #{aid} publicada em Reels."
+            if result.get("permalink"):
+                msg+=f"\n🔗 {result['permalink']}"
+            await q.message.reply_text(msg)
+        except Exception as e:
+            set_status(aid,"review")
+            await q.message.reply_text(f"⚠️ Falha ao publicar a matéria #{aid} em Reels: {e}")
 
 def run():
     init_db()
