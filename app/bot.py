@@ -61,7 +61,11 @@ async def testinstagram(update:Update,context:ContextTypes.DEFAULT_TYPE):
     image_url=f"{config.PUBLIC_BASE_URL}/media/{poster.split('/')[-1]}"
     try:
         result=await asyncio.to_thread(post_instagram_image,image_url,"🧪 Teste automático do Byte Curioso 27. Sistema de publicação conectado. #ByteCurioso27 #Rondonia")
-        await update.message.reply_text(f"✅ Teste publicado no Instagram. ID: {result.get('id','')}")
+        link=result.get("permalink","")
+        msg=f"✅ Teste publicado no Instagram. ID: {result.get('id','')}"
+        if link:
+            msg += f"\n🔗 {link}"
+        await update.message.reply_text(msg)
     except Exception as e:
         await update.message.reply_text(f"❌ Falha no teste do Instagram: {e}")
 
