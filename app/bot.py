@@ -126,7 +126,9 @@ async def _scan_job(context):
             poster=await asyncio.to_thread(make_poster,ai["headline"],a["category"],aid,a.get("image_url",""),a.get("source",""))
             image_url=f"{config.PUBLIC_BASE_URL}/media/{poster.split('/')[-1]}"
             caption=finish_caption(a,ai["caption_instagram"]).strip()
-            result=await asyncio.to_thread(post_instagram_image,image_url,caption)
+            reel=await asyncio.to_thread(make_reel_from_poster,poster,aid)
+            video_url=config.PUBLIC_BASE_URL+"/media/"+reel.rsplit("/",1)[-1]
+            result=await asyncio.to_thread(post_instagram_reel,video_url,caption)
             if result.get("status")!="published":
                 raise RuntimeError(f"Instagram não publicou: {result}")
             fb_result={"status":"skipped"}
@@ -136,7 +138,7 @@ async def _scan_job(context):
             except Exception as fb_error:
                 print(f"FACEBOOK_PUBLISH_ERROR id={aid} error={type(fb_error).__name__}:{safe_error(fb_error)}",flush=True)
             set_status(aid,"published")
-            print(f"PUBLISH_OK id={aid} media_id={result.get('id','')} type=feed_image",flush=True)
+            print(f"PUBLISH_OK id={aid} media_id={result.get('id','')} type=reel",flush=True)
             msg=f"✅ Instagram publicado\n{ai['headline']}"
             if result.get("permalink"): msg+=f"\n🔗 {result['permalink']}"
             if fb_result.get("status")=="published":
