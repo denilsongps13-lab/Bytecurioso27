@@ -70,3 +70,51 @@ def post_instagram_image(image_url, caption):
         except Exception:
             pass
     return {"status":"published","id":media_id,"permalink":permalink}
+
+
+def post_instagram_reel(video_url, caption):
+    if not (config.META_ENABLED and config.META_ACCESS_TOKEN and config.INSTAGRAM_USER_ID):
+        return {"status":"skipped","reason":"Instagram não configurado"}
+
+    create=requests.post(
+        _endpoint(f"{config.INSTAGRAM_USER_ID}/media"),
+        data={
+            "media_type":"REELS",
+            "video_url":video_url,
+            "caption":caption,
+            "share_to_feed":"true",
+            "access_token":config.META_ACCESS_TOKEN,
+        },
+        timeout=60,
+    )
+    if not create.ok:
+        raise RuntimeError(f"Instagram Reel create failed ({create.status_code}): {create.text[:500]}")
+    cid=create.json()["id"]
+
+    _wait_until_ready(cid, timeout_seconds=180, poll_seconds=4)
+
+    publish=requests.post(
+        _endpoint(f"{config.INSTAGRAM_USER_ID}/media_publish"),
+        data={
+            "creation_id":cid,
+            "access_token":config.META_ACCESS_TOKEN,
+        },
+        timeout=60,
+    )
+    if not publish.ok:
+        raise RuntimeError(f"Instagram Reel publish failed ({publish.status_code}): {publish.text[:500]}")
+
+    media_id=publish.json().get("id","")
+    permalink=""
+    if media_id:
+        try:
+            detail=requests.get(
+                _endpoint(media_id),
+                params={"fields":"id,permalink,media_type,username","access_token":config.META_ACCESS_TOKEN},
+                timeout=30,
+            )
+            if detail.ok:
+                permalink=detail.json().get("permalink","")
+        except Exception:
+            pass
+    return {"status":"published","id":media_id,"permalink":permalink}
