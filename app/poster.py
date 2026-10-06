@@ -54,6 +54,7 @@ def _load_b64_image(src_b64,out_name):
         return None
 
 AVATAR=_load_b64_image("assets/avatar_bc27.jpg.b64","avatar.jpg")
+APPROVED_HEALTH_ASSET=_load_b64_image("assets/approved_health_card.jpg.b64","approved_health_card.jpg")
 
 def asset_status():
     if not AVATAR or not Path(AVATAR).exists():
@@ -146,7 +147,17 @@ def _draw_cyber_background(img):
     d.line((0,10,W,10),fill=ORANGE,width=10)
     d.line((0,H-12,W,H-12),fill=ORANGE,width=8)
 
+def _use_approved_health_card(headline,source=""):
+    text=" ".join((headline or "").upper().split())
+    src=(source or "").upper()
+    return ("GIRO DA SAÚDE" in text and "RONDÔNIA" in text) or ("SAÚDE RONDÔNIA" in src and "CRIANÇAS" in text and "FAMÍLIAS" in text)
+
 def make_poster(headline,category,article_id,image_url="",source=""):
+    if _use_approved_health_card(headline,source) and APPROVED_HEALTH_ASSET and Path(APPROVED_HEALTH_ASSET).exists():
+        out=f"{MEDIA_DIR}/post_{article_id}.jpg"
+        Image.open(APPROVED_HEALTH_ASSET).convert("RGB").resize((W,H),Image.Resampling.LANCZOS).save(out,quality=94,optimize=True)
+        print(f"POSTER_APPROVED_ASSET id={article_id} kind=health",flush=True)
+        return out
     base=Image.new("RGBA",(W,H),BLACK+(255,))
     _draw_cyber_background(base)
     d=ImageDraw.Draw(base)
