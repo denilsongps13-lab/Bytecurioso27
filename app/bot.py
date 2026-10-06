@@ -33,6 +33,7 @@ async def send_preview(bot,chat_id,a,ai):
                 parse_mode="HTML",
                 reply_markup=kb(a["id"])
             )
+        print(f"PREVIEW_IMAGE_OK id={a['id']}", flush=True)
     except Exception as e:
         print(f"PREVIEW_IMAGE_ERROR id={a['id']} error={type(e).__name__}: {e}", flush=True)
         await bot.send_message(chat_id=chat_id,text=txt,parse_mode="HTML",reply_markup=kb(a["id"]))
