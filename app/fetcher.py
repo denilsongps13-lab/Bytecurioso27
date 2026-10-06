@@ -5,6 +5,19 @@ from bs4 import BeautifulSoup
 from app.db import insert_article, update_image
 
 log=logging.getLogger(__name__)
+SOCIAL_SOURCES={'instagram','facebook','tiktok','youtube','x','twitter'}
+
+def valid_story(a):
+    return bool(a.get('title') and len(a['title'])<=220 and (a.get('source') or '').strip().lower() not in SOCIAL_SOURCES)
+
+def classify_category(title,default='geral'):
+    from app.poster import category_key
+    text=category_key(title)
+    rules=[('eleicoes',r'eleic|eleit|elege|urnas|votacao|candidatur|campanha'),('empregos',r'concurso|vagas|empreg|processo_seletivo'),('saude',r'saude|hospital|vacina|atendimento_medico|medic|samu'),('ia',r'inteligencia_artificial|\bia\b'),('tecnologia',r'tecnologia|inovacao|digital|software'),('economia',r'economia|industria|negocio|inflacao|exporta|comercio|investimento'),('agronegocio',r'agro|pecuaria|safra|agricult'),('clima',r'chuva|clima|temporal|previsao_do_tempo'),('meio_ambiente',r'meio_ambiente|queimada|desmatamento'),('educacao',r'educacao|escola|universidade|professor'),('justica',r'justica|tribunal|sentenca|ministerio_publico'),('policia',r'policia|preso|prisao|operacao_policial'),('esportes',r'esporte|futebol|campeonato')]
+    for cat,pattern in rules:
+        if re.search(pattern,text): return cat
+    return default
+
 UA={'User-Agent':'Mozilla/5.0 ByteCurioso27News/3.0'}
 
 def load_sources(path=None):
@@ -83,8 +96,8 @@ def scan_sources():
             feed=feedparser.parse(r.content)
             for e in feed.entries[:10]:
                 source=e.get('source',{}).get('title') or s['name']
-                a={'source':source,'category':s.get('category','geral'),'title':e.get('title','').strip(),'url':e.get('link','').strip(),'summary':e.get('summary','')[:2000],'published':e.get('published',''),'image_url':_feed_image(e)}
-                if a['title'] and a['url']:
+                a={'source':source,'category':classify_category(e.get('title',''),s.get('category','geral')),'title':e.get('title','').strip(),'url':e.get('link','').strip(),'summary':e.get('summary','')[:2000],'published':e.get('published',''),'image_url':_feed_image(e)}
+                if valid_story(a) and a['url']:
                     aid=insert_article(a)
                     if aid: a['id']=aid;added.append(a)
         except Exception as e:

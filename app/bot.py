@@ -3,7 +3,7 @@ from telegram import InlineKeyboardButton,InlineKeyboardMarkup,Update
 from telegram.ext import Application,CommandHandler,CallbackQueryHandler,ContextTypes
 from app import config
 from app.db import init_db,get_article,pending,set_status,queued_articles,fp,claim_article
-from app.fetcher import scan_sources,enrich_image
+from app.fetcher import scan_sources,enrich_image,valid_story,classify_category
 from app.editor import prepare
 from app.poster import make_poster,make_test_poster,asset_status
 from app.reels import make_reel_from_poster
@@ -85,7 +85,7 @@ async def _scan_job(context):
     print("SCAN_START",flush=True)
     added=await asyncio.to_thread(scan_sources)
     rows=await asyncio.to_thread(queued_articles,300)
-    fresh=[a for a in rows if _fresh_enough(a)]
+    fresh=[a for a in rows if _fresh_enough(a) and valid_story(a)]
     selected=_select_for_cycle(fresh,config.MAX_POSTS_PER_CYCLE)
     print(f"SCAN_FOUND added={len(added)} queued={len(rows)} fresh={len(fresh)} selected={len(selected)}",flush=True)
 
@@ -145,7 +145,7 @@ async def _scan_job(context):
 async def startup_selftest(context:ContextTypes.DEFAULT_TYPE):
     try:
         poster=await asyncio.to_thread(make_test_poster)
-        reel=await asyncio.to_thread(make_reel_from_poster,poster,"selftest_v2")
+        reel=await asyncio.to_thread(make_reel_from_poster,poster,"selftest_v3")
         size=__import__("os").path.getsize(reel)
         print(f"REEL_SELFTEST_OK bytes={size}",flush=True)
     except Exception as e:
@@ -169,7 +169,9 @@ async def _visual_audit(context):
     await asyncio.to_thread(scan_sources)
     rows=await asyncio.to_thread(queued_articles,500)
     rows+=await asyncio.to_thread(pending,500)
-    fresh=sorted([a for a in rows if _fresh_enough(a)],key=_published_score,reverse=True)
+    fresh=sorted([a for a in rows if _fresh_enough(a) and valid_story(a)],key=_published_score,reverse=True)
+    for a in fresh:
+        a['category']=classify_category(a['title'],a['category'])
     groups=[{'saude'},{'economia','tecnologia','ia'},{'eleicoes','politica','cidades'}]
     outputs=[]
     for group in groups:
@@ -188,6 +190,7 @@ async def _visual_audit(context):
         reel=await asyncio.to_thread(make_reel_from_poster,str(Path('/tmp/media')/outputs[0]['image']),'visual_audit')
         with open(reel,'rb') as video:
             await context.bot.send_video(chat_id=config.TELEGRAM_OWNER_CHAT_ID,video=video,caption='Reel de teste: 720×1280, 24 fps, 6 segundos. Não publicado no Instagram.')
+    print('VISUAL_AUDIT_MANIFEST '+json.dumps(outputs,ensure_ascii=False),flush=True)
     Path('/tmp/media/audit.json').write_text(json.dumps(outputs,ensure_ascii=False),encoding='utf-8')
     print(f'VISUAL_AUDIT_DONE previews={len(outputs)} publishing=False',flush=True)
 
@@ -202,7 +205,7 @@ async def buscar(update:Update,context:ContextTypes.DEFAULT_TYPE):
 async def testarte(update:Update,context:ContextTypes.DEFAULT_TYPE):
     poster=await asyncio.to_thread(make_test_poster)
     with open(poster,"rb") as f:
-        await update.message.reply_photo(photo=f,caption=f"🎨 Teste visual v2\nMascote: {asset_status().get('avatar_ok')}")
+        await update.message.reply_photo(photo=f,caption=f"🎨 Teste visual v3\nMascote: {asset_status().get('avatar_ok')}")
     print("TESTARTE_OK",flush=True)
 
 async def pendentes_cmd(update:Update,context:ContextTypes.DEFAULT_TYPE):
@@ -240,6 +243,9 @@ async def callback(update:Update,context:ContextTypes.DEFAULT_TYPE):
     aid=int(sid)
     a=get_article(aid)
     if not a: return
+    if action=="pub" and not (valid_story(a) and _fresh_enough(a)):
+        await q.message.reply_text("Matéria fora dos critérios de fonte, título ou prazo. Publicação bloqueada.")
+        return
     if action=="drop":
         set_status(aid,"discarded")
         await q.edit_message_reply_markup(reply_markup=None)
@@ -281,7 +287,7 @@ async def bot_error_handler(update,context):
 
 def run():
     init_db()
-    print(f"BOOT v2 meta={config.META_ENABLED} mascot={asset_status()}",flush=True)
+    print(f"BOOT v3 meta={config.META_ENABLED} mascot={asset_status()}",flush=True)
     if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_OWNER_CHAT_ID:
         raise SystemExit("Configure TELEGRAM_BOT_TOKEN e TELEGRAM_OWNER_CHAT_ID")
     app=Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
