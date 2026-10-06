@@ -118,3 +118,32 @@ def post_instagram_reel(video_url, caption):
         except Exception:
             pass
     return {"status":"published","id":media_id,"permalink":permalink}
+
+
+def recent_marker_exists(marker, max_pages=5):
+    """Use recent Instagram captions as a durable publication ledger."""
+    if not (marker and config.META_ACCESS_TOKEN and config.INSTAGRAM_USER_ID):
+        return False
+    url=_endpoint(f"{config.INSTAGRAM_USER_ID}/media")
+    params={
+        "fields":"id,caption,timestamp",
+        "limit":"100",
+        "access_token":config.META_ACCESS_TOKEN,
+    }
+    try:
+        for _ in range(max_pages):
+            r=requests.get(url,params=params,timeout=30)
+            if not r.ok:
+                return False
+            payload=r.json()
+            for item in payload.get("data",[]) or []:
+                if marker in (item.get("caption") or ""):
+                    return True
+            nxt=(payload.get("paging") or {}).get("next")
+            if not nxt:
+                break
+            url=nxt
+            params=None
+    except Exception:
+        return False
+    return False
