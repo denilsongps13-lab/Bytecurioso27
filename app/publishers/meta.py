@@ -56,4 +56,17 @@ def post_instagram_image(image_url, caption):
     )
     if not publish.ok:
         raise RuntimeError(f"Instagram media publish failed ({publish.status_code}): {publish.text[:500]}")
-    return {"status":"published","id":publish.json().get("id","")}
+    media_id=publish.json().get("id","")
+    permalink=""
+    if media_id:
+        try:
+            detail=requests.get(
+                _endpoint(media_id),
+                params={"fields":"id,permalink,media_type,username","access_token":config.META_ACCESS_TOKEN},
+                timeout=30,
+            )
+            if detail.ok:
+                permalink=detail.json().get("permalink","")
+        except Exception:
+            pass
+    return {"status":"published","id":media_id,"permalink":permalink}
