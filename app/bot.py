@@ -15,9 +15,27 @@ def kb(aid):
 
 async def send_preview(bot,chat_id,a,ai):
     txt=(f"📰 <b>{html.escape(ai['headline'])}</b>\n\nFonte: {html.escape(a['source'])}\n"
-         f"Risco: <b>{ai['risk'].upper()}</b>\nMotivo: {html.escape(ai.get('reason',''))}\n\n"
-         f"{html.escape(ai['caption_instagram'][:1500])}")
-    await bot.send_message(chat_id=chat_id,text=txt,parse_mode="HTML",reply_markup=kb(a["id"]))
+         f"{html.escape(ai['caption_instagram'][:1100])}")
+    try:
+        poster=await asyncio.to_thread(
+            make_poster,
+            ai["headline"],
+            a.get("category","notícia"),
+            f"preview_{a['id']}",
+            a.get("image_url",""),
+            a.get("source","")
+        )
+        with open(poster,"rb") as f:
+            await bot.send_photo(
+                chat_id=chat_id,
+                photo=f,
+                caption=txt,
+                parse_mode="HTML",
+                reply_markup=kb(a["id"])
+            )
+    except Exception as e:
+        print(f"PREVIEW_IMAGE_ERROR id={a['id']} error={type(e).__name__}: {e}", flush=True)
+        await bot.send_message(chat_id=chat_id,text=txt,parse_mode="HTML",reply_markup=kb(a["id"]))
 
 def _published_score(a):
     from email.utils import parsedate_to_datetime
@@ -202,11 +220,18 @@ async def callback(update:Update,context:ContextTypes.DEFAULT_TYPE):
             set_status(aid,"review")
             await q.message.reply_text(f"⚠️ Falha ao publicar a matéria #{aid} em Reels: {e}")
 
+async def bot_error_handler(update, context):
+    err=context.error
+    if err and err.__class__.__name__=="Conflict":
+        print("TELEGRAM_POLLING_HANDOFF", flush=True)
+        return
+    print(f"TELEGRAM_ERROR {type(err).__name__}: {err}", flush=True)
+
 def run():
     init_db()
     if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_OWNER_CHAT_ID:
         raise SystemExit("Configure TELEGRAM_BOT_TOKEN e TELEGRAM_OWNER_CHAT_ID")
-    app=Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+    app=Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()\n    app.add_error_handler(bot_error_handler)
     app.add_handler(CommandHandler("start",start))
     app.add_handler(CommandHandler("buscar",buscar))
     app.add_handler(CommandHandler("pendentes",pendentes_cmd))
