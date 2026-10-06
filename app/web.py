@@ -32,3 +32,8 @@ def terms():
 @app.get("/privacy", response_class=HTMLResponse)
 def privacy():
     return Path("privacy-policy.html").read_text(encoding="utf-8")
+
+
+@app.get("/tiktokQcHLZapipDw8ZrKwT3gCtTKE1ETsjRqW.txt")
+def tiktok_site_verification():
+    return FileResponse("tiktokQcHLZapipDw8ZrKwT3gCtTKE1ETsjRqW.txt", media_type="text/plain")
