@@ -23,14 +23,16 @@ def kb(aid):
                                   InlineKeyboardButton("❌ DESCARTAR",callback_data=f"drop:{aid}")]])
 
 async def send_preview(bot,chat_id,a,ai):
-    txt=(f"📰 <b>{html.escape(ai['headline'])}</b>\n\nFonte: {html.escape(a['source'])}\n"
-         f"{html.escape(ai['caption_instagram'][:550])}")
+    txt=f"📰 <b>{html.escape(ai['headline'])}</b>\n\nLegenda completa enviada abaixo."
     poster=await asyncio.to_thread(
         make_poster,ai["headline"],a.get("category","notícia"),
         f"preview_{a['id']}",a.get("image_url",""),a.get("source","")
     )
     with open(poster,"rb") as f:
         await bot.send_photo(chat_id=chat_id,photo=f,caption=txt,parse_mode="HTML",reply_markup=kb(a["id"]))
+    caption=ai['caption_instagram']
+    await bot.send_message(chat_id=chat_id,text=caption,reply_markup=kb(a['id']),disable_web_page_preview=True)
+    print(f"PREVIEW_CAPTION_OK id={a['id']} chars={len(caption)}",flush=True)
     print(f"PREVIEW_IMAGE_OK id={a['id']}",flush=True)
 
 def _published_score(a):

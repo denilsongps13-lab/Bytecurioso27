@@ -65,7 +65,7 @@ def _resolve_article_url(url):
         return url
     return url
 
-def _page_candidates(url):
+def _page_details(url):
     with requests.get(url,headers=UA,timeout=(5,12),stream=True) as r:
         r.raise_for_status(); body=bytearray()
         for chunk in r.iter_content(65536):
@@ -80,7 +80,17 @@ def _page_candidates(url):
                     if _valid_image_url(u): urls.append(u)
         article=soup.find('article') or soup.find('main') or soup
         urls.extend(_html_images(str(article),r.url))
-        return list(dict.fromkeys(urls))[:8]
+        for tag in article.select('script,style,nav,header,footer,aside,form'):
+            tag.decompose()
+        paragraphs=[]
+        for tag in article.select('p'):
+            text=' '.join(tag.get_text(' ',strip=True).split())
+            if len(text)>=70 and not re.search(r'aceit.*cookies|assine nossa|todos os direitos|newsletter',text,re.I):
+                paragraphs.append(text)
+        return list(dict.fromkeys(urls))[:8], '\n\n'.join(dict.fromkeys(paragraphs))[:12000]
+
+def _page_candidates(url):
+    return _page_details(url)[0]
 
 def _usable_image(url):
     # Validate actual pixels, not just a URL or HTTP status.
@@ -111,7 +121,12 @@ def enrich_image(article):
     resolved=_resolve_article_url(article.get('url',''))
     article['resolved_url']=resolved  # Keep stored URL stable for fingerprints.
     if resolved and urlparse(resolved).hostname!='news.google.com':
-        try: candidates.extend(_page_candidates(resolved))
+        try:
+            images,body=_page_details(resolved)
+            candidates.extend(images)
+            if body:
+                article['article_text']=body
+                print(f'ARTICLE_TEXT_OK id={article.get("id")} chars={len(body)}',flush=True)
         except Exception as e: log.warning('IMAGE_PAGE_ERROR %s',type(e).__name__)
     article['image_url']=''
     for url in dict.fromkeys(candidates):
