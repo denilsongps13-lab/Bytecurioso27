@@ -134,7 +134,7 @@ def recent_marker_exists(marker, max_pages=5):
         for _ in range(max_pages):
             r=requests.get(url,params=params,timeout=30)
             if not r.ok:
-                return False
+                raise RuntimeError("META_DUPLICATE_CHECK_FAILED")
             payload=r.json()
             for item in payload.get("data",[]) or []:
                 if marker in (item.get("caption") or ""):
@@ -144,8 +144,8 @@ def recent_marker_exists(marker, max_pages=5):
                 break
             url=nxt
             params=None
-    except Exception:
-        return False
+    except Exception as e:
+        raise RuntimeError("META_DUPLICATE_CHECK_FAILED") from e
     return False
 
 
@@ -160,4 +160,5 @@ def check_instagram_connection():
     if not r.ok:
         return {"ok":False,"status_code":r.status_code,"error":r.text[:300]}
     data=r.json()
-    return {"ok":True,"id":data.get("id",""),"username":data.get("username",""),"account_type":data.get("account_type","")}
+    return {"ok":data.get("username","").lower()=="bytecurioso27" and str(data.get("id",""))==str(config.INSTAGRAM_USER_ID),"id":data.get("id",""),"username":data.get("username",""),"account_type":data.get("account_type","")}
+

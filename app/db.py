@@ -10,7 +10,9 @@ except Exception:
     psycopg=None
     dict_row=None
 
-USE_POSTGRES=bool(DATABASE_URL and psycopg)
+if DATABASE_URL and psycopg is None:
+    raise RuntimeError("PostgreSQL configured but psycopg is missing")
+USE_POSTGRES=bool(DATABASE_URL)
 
 def backend_name():
     return "postgres" if USE_POSTGRES else "sqlite"
@@ -128,3 +130,21 @@ def queued_articles(limit=300):
                           ORDER BY CASE WHEN published IS NULL OR published='' THEN 1 ELSE 0 END,
                           created_at DESC,id DESC LIMIT ?""",(limit,)).fetchall()
         return [dict(r) for r in rows]
+
+
+
+def update_image(article_id,image_url):
+    if USE_POSTGRES:
+        with _pg() as c:
+            c.execute("UPDATE articles SET image_url=%s WHERE id=%s",(image_url,article_id))
+    else:
+        with _sqlite() as c:
+            c.execute("UPDATE articles SET image_url=? WHERE id=?",(image_url,article_id))
+
+def claim_article(article_id,expected_status='prepared'):
+    if USE_POSTGRES:
+        with _pg() as c:
+            result=c.execute("UPDATE articles SET status='publishing' WHERE id=%s AND status=%s RETURNING id",(article_id,expected_status))
+            return result.fetchone() is not None
+    with _sqlite() as c:
+        return c.execute("UPDATE articles SET status='publishing' WHERE id=? AND status=?",(article_id,expected_status)).rowcount==1

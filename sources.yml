@@ -147,7 +147,7 @@ sources:
   - name: "Queimadas e clima Rondônia"
     type: rss
     url: "https://news.google.com/rss/search?q=queimadas+clima+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
-    category: meio_ambiente
+    category: clima
 
   # TECNOLOGIA / INOVAÇÃO
   - name: "Tecnologia Rondônia"
@@ -158,7 +158,7 @@ sources:
   - name: "Inteligência Artificial Brasil"
     type: rss
     url: "https://news.google.com/rss/search?q=intelig%C3%AAncia+artificial+Brasil&hl=pt-BR&gl=BR&ceid=BR:pt-419"
-    category: tecnologia
+    category: ia
 
   # ESPORTES / CULTURA / EVENTOS
   - name: "Esportes Rondônia"
@@ -170,3 +170,4 @@ sources:
     type: rss
     url: "https://news.google.com/rss/search?q=eventos+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
     category: eventos
+

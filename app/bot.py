@@ -2,12 +2,21 @@ import json,html,asyncio
 from telegram import InlineKeyboardButton,InlineKeyboardMarkup,Update
 from telegram.ext import Application,CommandHandler,CallbackQueryHandler,ContextTypes
 from app import config
-from app.db import init_db,get_article,pending,set_status,queued_articles,fp
+from app.db import init_db,get_article,pending,set_status,queued_articles,fp,claim_article
 from app.fetcher import scan_sources,enrich_image
 from app.editor import prepare
 from app.poster import make_poster,make_test_poster,asset_status
 from app.reels import make_reel_from_poster
 from app.publishers.meta import post_instagram_reel,recent_marker_exists,check_instagram_connection
+
+SCAN_LOCK=asyncio.Lock()
+
+def owner_only(handler):
+    async def checked(update,context):
+        if str(update.effective_chat.id)!=str(config.TELEGRAM_OWNER_CHAT_ID):
+            return
+        return await handler(update,context)
+    return checked
 
 def kb(aid):
     return InlineKeyboardMarkup([[InlineKeyboardButton("✅ PUBLICAR",callback_data=f"pub:{aid}"),
@@ -15,7 +24,7 @@ def kb(aid):
 
 async def send_preview(bot,chat_id,a,ai):
     txt=(f"📰 <b>{html.escape(ai['headline'])}</b>\n\nFonte: {html.escape(a['source'])}\n"
-         f"{html.escape(ai['caption_instagram'][:1100])}")
+         f"{html.escape(ai['caption_instagram'][:550])}")
     poster=await asyncio.to_thread(
         make_poster,ai["headline"],a.get("category","notícia"),
         f"preview_{a['id']}",a.get("image_url",""),a.get("source","")
@@ -66,6 +75,13 @@ def _fresh_enough(a):
         return False
 
 async def scan_job(context:ContextTypes.DEFAULT_TYPE):
+    if SCAN_LOCK.locked():
+        print('SCAN_SKIP already_running=True',flush=True)
+        return
+    async with SCAN_LOCK:
+        await _scan_job(context)
+
+async def _scan_job(context):
     print("SCAN_START",flush=True)
     added=await asyncio.to_thread(scan_sources)
     rows=await asyncio.to_thread(queued_articles,300)
@@ -84,11 +100,14 @@ async def scan_job(context:ContextTypes.DEFAULT_TYPE):
             if isinstance(ai,list): ai=ai[0] if ai else {}
             if not isinstance(ai,dict):
                 raise ValueError("Resposta da IA inválida")
+            # Artwork uses only the source headline; AI must not introduce facts.
+            ai['headline']=a['title']
+            ai.setdefault('caption_instagram',a['title'])
             from app.db import set_ai
             set_ai(aid,ai)
             print(f"AI_DONE id={aid}",flush=True)
 
-            if not config.META_ENABLED:
+            if not (config.META_ENABLED and config.AUTO_PUBLISH_LOW_RISK and ai.get('risk')=='low'):
                 set_status(aid,"prepared")
                 await send_preview(context.bot,config.TELEGRAM_OWNER_CHAT_ID,a,ai)
                 continue
@@ -99,6 +118,9 @@ async def scan_job(context:ContextTypes.DEFAULT_TYPE):
                 print(f"DUPLICATE_SKIP id={aid}",flush=True)
                 continue
 
+            if not await asyncio.to_thread(claim_article,aid):
+                print(f'DUPLICATE_CLAIM_SKIP id={aid}',flush=True)
+                continue
             poster=await asyncio.to_thread(make_poster,ai["headline"],a["category"],aid,a.get("image_url",""),a.get("source",""))
             reel=await asyncio.to_thread(make_reel_from_poster,poster,aid)
             video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
@@ -133,6 +155,41 @@ async def startup_selftest(context:ContextTypes.DEFAULT_TYPE):
         print(f"META_CONNECTION_CHECK {meta}",flush=True)
     except Exception as e:
         print(f"META_CONNECTION_ERROR {type(e).__name__}:{e}",flush=True)
+
+async def visual_audit(context):
+    async with SCAN_LOCK:
+        await _visual_audit(context)
+
+async def _visual_audit(context):
+    if config.META_ENABLED:
+        raise RuntimeError('AUDIT_ERROR publishing_must_be_disabled')
+    from app.poster import category_key
+    from app.db import set_ai
+    from pathlib import Path
+    await asyncio.to_thread(scan_sources)
+    rows=await asyncio.to_thread(queued_articles,500)
+    rows+=await asyncio.to_thread(pending,500)
+    fresh=sorted([a for a in rows if _fresh_enough(a)],key=_published_score,reverse=True)
+    groups=[{'saude'},{'economia','tecnologia','ia'},{'eleicoes','politica','cidades'}]
+    outputs=[]
+    for group in groups:
+        a=next((a for a in fresh if category_key(a.get('category')) in group),None)
+        if not a:
+            print(f'VISUAL_AUDIT_MISSING category={sorted(group)}',flush=True)
+            continue
+        a=await asyncio.to_thread(enrich_image,a)
+        ai=await asyncio.to_thread(prepare,a)
+        ai['headline']=a['title'];ai.setdefault('caption_instagram',a['title'])
+        await asyncio.to_thread(set_ai,a['id'],ai)
+        await send_preview(context.bot,config.TELEGRAM_OWNER_CHAT_ID,a,ai)
+        path=await asyncio.to_thread(make_poster,ai['headline'],a['category'],f'audit_{a["id"]}',a.get('image_url',''),a['source'])
+        outputs.append({'id':a['id'],'headline':a['title'],'source':a['source'],'category':a['category'],'url':a['url'],'published':a['published'],'image':Path(path).name})
+    if outputs:
+        reel=await asyncio.to_thread(make_reel_from_poster,str(Path('/tmp/media')/outputs[0]['image']),'visual_audit')
+        with open(reel,'rb') as video:
+            await context.bot.send_video(chat_id=config.TELEGRAM_OWNER_CHAT_ID,video=video,caption='Reel de teste: 720×1280, 24 fps, 6 segundos. Não publicado no Instagram.')
+    Path('/tmp/media/audit.json').write_text(json.dumps(outputs,ensure_ascii=False),encoding='utf-8')
+    print(f'VISUAL_AUDIT_DONE previews={len(outputs)} publishing=False',flush=True)
 
 async def start(update:Update,context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🗞 Byte Curioso 27 ativo.\n/buscar /testarte /status /pendentes")
@@ -192,13 +249,20 @@ async def callback(update:Update,context:ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("⏸ Publicação pausada. Nada foi enviado ao Instagram.")
         return
     try:
+        marker='#BC27'+fp(a.get('title',''),a.get('url',''))[:12]
+        if a.get('status')=='published' or await asyncio.to_thread(recent_marker_exists,marker):
+            await q.message.reply_text('Esta notícia já foi publicada.')
+            return
+        if not await asyncio.to_thread(claim_article,aid,a.get('status')):
+            await q.message.reply_text('Esta notícia já está em processamento.')
+            return
         ai=json.loads(a.get("ai_json") or "{}")
-        headline=ai.get("headline") or a.get("title") or "Byte Curioso 27"
+        headline=a.get("title") or "Byte Curioso 27"
         caption=ai.get("caption_instagram") or a.get("title") or ""
         poster=await asyncio.to_thread(make_poster,headline,a.get("category") or "notícia",aid,a.get("image_url",""),a.get("source",""))
         reel=await asyncio.to_thread(make_reel_from_poster,poster,aid)
         video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
-        result=await asyncio.to_thread(post_instagram_reel,video_url,caption)
+        result=await asyncio.to_thread(post_instagram_reel,video_url,caption+"\n\n"+marker)
         if result.get("status")!="published":
             raise RuntimeError(str(result))
         set_status(aid,"published")
@@ -222,16 +286,19 @@ def run():
         raise SystemExit("Configure TELEGRAM_BOT_TOKEN e TELEGRAM_OWNER_CHAT_ID")
     app=Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
     app.add_error_handler(bot_error_handler)
-    app.add_handler(CommandHandler("start",start))
-    app.add_handler(CommandHandler("buscar",buscar))
-    app.add_handler(CommandHandler("testarte",testarte))
-    app.add_handler(CommandHandler("pendentes",pendentes_cmd))
-    app.add_handler(CommandHandler("status",status))
-    app.add_handler(CommandHandler("testinstagram",testinstagram))
-    app.add_handler(CallbackQueryHandler(callback))
+    app.add_handler(CommandHandler("start",owner_only(start)))
+    app.add_handler(CommandHandler("buscar",owner_only(buscar)))
+    app.add_handler(CommandHandler("testarte",owner_only(testarte)))
+    app.add_handler(CommandHandler("pendentes",owner_only(pendentes_cmd)))
+    app.add_handler(CommandHandler("status",owner_only(status)))
+    app.add_handler(CommandHandler("testinstagram",owner_only(testinstagram)))
+    app.add_handler(CallbackQueryHandler(owner_only(callback)))
     app.job_queue.run_once(startup_selftest,when=5)
-    app.job_queue.run_repeating(scan_job,interval=config.SCAN_INTERVAL_MINUTES*60,first=20)
+    if config.VISUAL_AUDIT_PREVIEWS:
+        app.job_queue.run_once(visual_audit,when=15)
+    app.job_queue.run_repeating(scan_job,interval=config.SCAN_INTERVAL_MINUTES*60,first=120)
     app.run_polling(drop_pending_updates=True)
 
 if __name__=="__main__":
     run()
+
