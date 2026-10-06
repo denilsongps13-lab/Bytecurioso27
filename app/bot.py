@@ -2,7 +2,7 @@ import json,html,asyncio
 from telegram import InlineKeyboardButton,InlineKeyboardMarkup,Update
 from telegram.ext import Application,CommandHandler,CallbackQueryHandler,ContextTypes
 from app import config
-from app.db import init_db,get_article,pending,set_status
+from app.db import init_db,get_article,pending,set_status,queued_articles
 from app.fetcher import scan_sources
 from app.editor import prepare
 from app.poster import make_poster, make_test_poster
@@ -19,19 +19,48 @@ async def send_preview(bot,chat_id,a,ai):
          f"{html.escape(ai['caption_instagram'][:1500])}")
     await bot.send_message(chat_id=chat_id,text=txt,parse_mode="HTML",reply_markup=kb(a["id"]))
 
-def _pick_one_per_category(rows):
+def _published_score(a):
+    from email.utils import parsedate_to_datetime
+    from datetime import timezone
+    raw=(a.get("published") or "").strip()
+    if raw:
+        try:
+            dt=parsedate_to_datetime(raw)
+            if dt.tzinfo is None:
+                dt=dt.replace(tzinfo=timezone.utc)
+            return dt.timestamp()
+        except Exception:
+            pass
+    return float(a.get("id") or 0)
+
+def _select_for_cycle(rows, limit=3):
+    # Breaking/newest items jump ahead. Older queued items remain for next cycles.
+    ordered=sorted(rows,key=_published_score,reverse=True)
     chosen=[]
-    seen=set()
-    for a in rows:
+    used_categories=set()
+
+    # First pass: favor variety among the newest items.
+    for a in ordered:
         cat=(a.get("category") or "geral").strip().lower()
-        if cat not in seen:
+        if cat not in used_categories:
             chosen.append(a)
-            seen.add(cat)
+            used_categories.add(cat)
+            if len(chosen)>=limit:
+                return chosen
+
+    # Second pass: fill any remaining slots strictly by freshness.
+    chosen_ids={a["id"] for a in chosen}
+    for a in ordered:
+        if a["id"] not in chosen_ids:
+            chosen.append(a)
+            if len(chosen)>=limit:
+                break
     return chosen
 
 async def scan_job(context: ContextTypes.DEFAULT_TYPE):
-    rows=await asyncio.to_thread(scan_sources)
-    selected=_pick_one_per_category(rows)
+    await asyncio.to_thread(scan_sources)
+    rows=await asyncio.to_thread(queued_articles,100)
+    selected=_select_for_cycle(rows,3)
     for a in selected:
         ai=await asyncio.to_thread(prepare,a)
         if isinstance(ai, list):
