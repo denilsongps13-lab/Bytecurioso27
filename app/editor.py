@@ -1,25 +1,68 @@
-import json,re
-from openai import OpenAI
-from app.config import OPENAI_API_KEY, OPENAI_MODEL
+import json,re,requests
+from app.config import GEMINI_API_KEY, GEMINI_MODEL, OPENAI_API_KEY, OPENAI_MODEL
 
 INSTRUCTIONS = """Você é o editor automatizado do Byte Curioso 27, jornal digital de Rondônia.
 Resuma sem inventar, preserve atribuição à fonte e não transforme alegação em fato.
 Classifique risk=high para acusações, denúncias, mortes não confirmadas, política eleitoral sensível,
 pesquisas eleitorais, crime envolvendo pessoa identificável e conteúdo potencialmente difamatório.
 Classifique risk=low para serviços, concursos, trânsito, eventos, agenda e comunicados oficiais.
-Retorne APENAS JSON com headline, caption_instagram, caption_tiktok, short_script, risk, reason, hashtags."""
+Retorne APENAS JSON válido com:
+headline, caption_instagram, caption_tiktok, short_script, risk, reason, hashtags.
+Não peça voto, não faça propaganda eleitoral e não invente nomes, números ou fatos."""
 
 def fallback(a):
     t=a["title"][:140]
-    return {"headline":t.upper(),"caption_instagram":f"{t}\n\nFonte: {a['source']}\n\n#Rondonia #ByteCurioso27",
-    "caption_tiktok":f"{t} | Fonte: {a['source']} #Rondonia #ByteCurioso27",
-    "short_script":f"Notícia de Rondônia. {t}.","risk":"high","reason":"IA não configurada","hashtags":["#Rondonia","#ByteCurioso27"]}
+    return {
+        "headline":t.upper(),
+        "caption_instagram":f"{t}\n\nFonte: {a['source']}\n\n#Rondonia #ByteCurioso27",
+        "caption_tiktok":f"{t} | Fonte: {a['source']} #Rondonia #ByteCurioso27",
+        "short_script":f"Notícia de Rondônia. {t}.",
+        "risk":"high",
+        "reason":"IA não configurada",
+        "hashtags":["#Rondonia","#ByteCurioso27"]
+    }
+
+def _parse_json(txt):
+    txt=re.sub(r"^\`\`\`json\s*|\s*\`\`\`$","",txt.strip(),flags=re.I|re.S)
+    return json.loads(txt)
+
+def _prepare_gemini(a):
+    prompt=f"""{INSTRUCTIONS}
+
+FONTE: {a['source']}
+CATEGORIA: {a['category']}
+TÍTULO: {a['title']}
+RESUMO: {a.get('summary','')}
+LINK: {a['url']}
+"""
+    url=f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+    payload={
+        "contents":[{"parts":[{"text":prompt}]}],
+        "generationConfig":{"responseMimeType":"application/json","temperature":0.2}
+    }
+    r=requests.post(url,json=payload,timeout=60)
+    r.raise_for_status()
+    data=r.json()
+    txt=data["candidates"][0]["content"]["parts"][0]["text"]
+    return _parse_json(txt)
+
+def _prepare_openai(a):
+    from openai import OpenAI
+    r=OpenAI(api_key=OPENAI_API_KEY).responses.create(
+        model=OPENAI_MODEL,
+        instructions=INSTRUCTIONS,
+        input=f"FONTE: {a['source']}\nCATEGORIA: {a['category']}\nTÍTULO: {a['title']}\nRESUMO: {a.get('summary','')}\nLINK: {a['url']}"
+    )
+    return _parse_json(r.output_text)
 
 def prepare(a):
-    if not OPENAI_API_KEY: return fallback(a)
-    r=OpenAI(api_key=OPENAI_API_KEY).responses.create(
-        model=OPENAI_MODEL,instructions=INSTRUCTIONS,
-        input=f"FONTE: {a['source']}\nCATEGORIA: {a['category']}\nTÍTULO: {a['title']}\nRESUMO: {a.get('summary','')}\nLINK: {a['url']}")
-    txt=re.sub(r"^\`\`\`json\s*|\s*\`\`\`$","",r.output_text.strip(),flags=re.I|re.S)
-    try: return json.loads(txt)
-    except: return fallback(a)
+    try:
+        if GEMINI_API_KEY:
+            return _prepare_gemini(a)
+        if OPENAI_API_KEY:
+            return _prepare_openai(a)
+    except Exception as e:
+        out=fallback(a)
+        out["reason"]=f"Erro na IA: {str(e)[:160]}"
+        return out
+    return fallback(a)
