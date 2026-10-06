@@ -2,12 +2,12 @@ import json,html,asyncio
 from telegram import InlineKeyboardButton,InlineKeyboardMarkup,Update
 from telegram.ext import Application,CommandHandler,CallbackQueryHandler,ContextTypes
 from app import config
-from app.db import init_db,get_article,pending,set_status,queued_articles
+from app.db import init_db,get_article,pending,set_status,queued_articles,fp
 from app.fetcher import scan_sources,enrich_image
 from app.editor import prepare
 from app.poster import make_poster, make_test_poster
 from app.reels import make_reel_from_poster
-from app.publishers.meta import post_instagram_reel
+from app.publishers.meta import post_instagram_reel, recent_marker_exists
 
 def kb(aid):
     return InlineKeyboardMarkup([[InlineKeyboardButton("✅ PUBLICAR",callback_data=f"pub:{aid}"),
@@ -102,6 +102,13 @@ async def scan_job(context: ContextTypes.DEFAULT_TYPE):
             set_ai(aid,ai)
 
             if config.META_ENABLED:
+                marker="#BC27"+fp(a.get("title",""),a.get("url",""))[:12]
+                if await asyncio.to_thread(recent_marker_exists,marker):
+                    set_status(aid,"duplicate")
+                    print(f"DUPLICATE_SKIP id={aid} marker={marker}", flush=True)
+                    continue
+                caption=(ai["caption_instagram"]+"\n\n"+marker).strip()
+
                 print(f"POSTER_START id={aid}", flush=True)
                 poster=await asyncio.to_thread(make_poster,ai["headline"],a["category"],aid,a.get("image_url",""),a.get("source",""))
                 print(f"POSTER_DONE id={aid}", flush=True)
@@ -112,7 +119,7 @@ async def scan_job(context: ContextTypes.DEFAULT_TYPE):
 
                 video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
                 print(f"PUBLISH_START id={aid} category={a.get('category','')}", flush=True)
-                result=await asyncio.to_thread(post_instagram_reel,video_url,ai["caption_instagram"])
+                result=await asyncio.to_thread(post_instagram_reel,video_url,caption)
                 set_status(aid,"published")
                 print(f"PUBLISH_OK id={aid} media_id={result.get('id','')}", flush=True)
                 msg=f"✅ Publicado automaticamente em Reels\n{ai['headline']}\nID: {result.get('id','')}"
