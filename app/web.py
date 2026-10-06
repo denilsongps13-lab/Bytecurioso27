@@ -37,3 +37,7 @@ def privacy():
 @app.get("/tiktokQcHLZapipDw8ZrKwT3gCtTKE1ETsjRqW.txt")
 def tiktok_site_verification():
     return FileResponse("tiktokQcHLZapipDw8ZrKwT3gCtTKE1ETsjRqW.txt", media_type="text/plain")
+
+@app.get("/tiktok/callback", response_class=HTMLResponse)
+def tiktok_callback():
+    return "<h2>Byte Curioso 27</h2><p>TikTok Login Kit callback ativo.</p>"
