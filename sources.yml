@@ -29,7 +29,7 @@ sources:
   - name: "Eleições Rondônia"
     type: rss
     url: "https://news.google.com/rss/search?q=elei%C3%A7%C3%B5es+Rond%C3%B4nia&hl=pt-BR&gl=BR&ceid=BR:pt-419"
-    category: politica
+    category: eleicoes
 
   # GOVERNO / OFICIAL
   - name: "Governo de Rondônia"
