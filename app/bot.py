@@ -58,40 +58,78 @@ def _select_for_cycle(rows, limit=3):
     return chosen
 
 async def scan_job(context: ContextTypes.DEFAULT_TYPE):
+    from datetime import datetime, timezone
+    from email.utils import parsedate_to_datetime
+
+    def fresh_enough(a):
+        raw=(a.get("published") or "").strip()
+        if not raw:
+            return True
+        try:
+            dt=parsedate_to_datetime(raw)
+            if dt.tzinfo is None:
+                dt=dt.replace(tzinfo=timezone.utc)
+            age=(datetime.now(timezone.utc)-dt.astimezone(timezone.utc)).total_seconds()/3600
+            return age <= config.MAX_ARTICLE_AGE_HOURS
+        except Exception:
+            return True
+
     print("SCAN_START", flush=True)
     added=await asyncio.to_thread(scan_sources)
-    rows=await asyncio.to_thread(queued_articles,100)
-    selected=_select_for_cycle(rows,3)
-    print(f"SCAN_FOUND added={len(added)} queued={len(rows)} selected={len(selected)}", flush=True)
+    rows=await asyncio.to_thread(queued_articles,300)
+    fresh=[a for a in rows if fresh_enough(a)]
+    selected=_select_for_cycle(fresh,config.MAX_POSTS_PER_CYCLE)
+    print(f"SCAN_FOUND added={len(added)} queued={len(rows)} fresh={len(fresh)} selected={len(selected)}", flush=True)
+
     for a in selected:
-        a=await asyncio.to_thread(enrich_image,a)
-        ai=await asyncio.to_thread(prepare,a)
-        if isinstance(ai, list):
-            ai = ai[0] if ai else {}
-        if not isinstance(ai, dict):
-            ai = {"headline":a["title"].upper(),"caption_instagram":a["title"],"caption_tiktok":a["title"],"short_script":a["title"],"risk":"high","reason":"Formato inesperado da IA","hashtags":["#Rondonia","#ByteCurioso27"]}
-        from app.db import set_ai
-        set_ai(a["id"],ai)
-        if config.META_ENABLED:
-            poster=make_poster(ai["headline"],a["category"],a["id"],a.get("image_url",""),a.get("source",""))
-            reel=make_reel_from_poster(poster,a["id"])
-            video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
-            try:
-                print(f"PUBLISH_START id={a['id']} category={a.get('category','')}", flush=True)
+        aid=a["id"]
+        try:
+            print(f"ARTICLE_START id={aid}", flush=True)
+
+            print(f"IMAGE_START id={aid}", flush=True)
+            a=await asyncio.to_thread(enrich_image,a)
+            print(f"IMAGE_DONE id={aid} has_image={bool(a.get('image_url'))}", flush=True)
+
+            print(f"AI_START id={aid}", flush=True)
+            ai=await asyncio.to_thread(prepare,a)
+            if isinstance(ai, list):
+                ai = ai[0] if ai else {}
+            if not isinstance(ai, dict):
+                ai = {"headline":a["title"].upper(),"caption_instagram":a["title"],"caption_tiktok":a["title"],"short_script":a["title"],"risk":"high","reason":"Formato inesperado da IA","hashtags":["#Rondonia","#ByteCurioso27"]}
+            print(f"AI_DONE id={aid}", flush=True)
+
+            from app.db import set_ai
+            set_ai(aid,ai)
+
+            if config.META_ENABLED:
+                print(f"POSTER_START id={aid}", flush=True)
+                poster=await asyncio.to_thread(make_poster,ai["headline"],a["category"],aid,a.get("image_url",""),a.get("source",""))
+                print(f"POSTER_DONE id={aid}", flush=True)
+
+                print(f"REEL_START id={aid}", flush=True)
+                reel=await asyncio.to_thread(make_reel_from_poster,poster,aid)
+                print(f"REEL_DONE id={aid}", flush=True)
+
+                video_url=f"{config.PUBLIC_BASE_URL}/media/{reel.split('/')[-1]}"
+                print(f"PUBLISH_START id={aid} category={a.get('category','')}", flush=True)
                 result=await asyncio.to_thread(post_instagram_reel,video_url,ai["caption_instagram"])
-                set_status(a["id"],"published")
-                print(f"PUBLISH_OK id={a['id']} media_id={result.get('id','')}", flush=True)
+                set_status(aid,"published")
+                print(f"PUBLISH_OK id={aid} media_id={result.get('id','')}", flush=True)
                 msg=f"✅ Publicado automaticamente em Reels\n{ai['headline']}\nID: {result.get('id','')}"
                 if result.get("permalink"):
                     msg+=f"\n🔗 {result['permalink']}"
                 await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,msg)
-            except Exception as e:
-                print(f"PUBLISH_ERROR id={a['id']} error={e}", flush=True)
-                set_status(a["id"],"review")
-                await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,f"⚠️ Falha ao publicar automaticamente: {e}")
-        else:
-            set_status(a["id"],"prepared")
-            await send_preview(context.bot,config.TELEGRAM_OWNER_CHAT_ID,a,ai)
+            else:
+                set_status(aid,"prepared")
+                await send_preview(context.bot,config.TELEGRAM_OWNER_CHAT_ID,a,ai)
+
+        except Exception as e:
+            print(f"ARTICLE_ERROR id={aid} error={type(e).__name__}: {e}", flush=True)
+            set_status(aid,"review")
+            try:
+                await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,f"⚠️ Falha ao processar matéria #{aid}: {e}")
+            except Exception:
+                pass
 
 async def start(update:Update,context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🗞 Byte Curioso 27 News Bot ativo.\n/buscar /pendentes /status")
