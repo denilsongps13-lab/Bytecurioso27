@@ -5,6 +5,8 @@ from app import config
 from app.db import init_db,get_article,pending,set_status
 from app.fetcher import scan_sources
 from app.editor import prepare
+from app.poster import make_poster, make_test_poster
+from app.publishers.meta import post_instagram_image
 
 def kb(aid):
     return InlineKeyboardMarkup([[InlineKeyboardButton("✅ PUBLICAR",callback_data=f"pub:{aid}"),
@@ -22,8 +24,20 @@ async def scan_job(context: ContextTypes.DEFAULT_TYPE):
         ai=await asyncio.to_thread(prepare,a)
         from app.db import set_ai
         set_ai(a["id"],ai)
-        set_status(a["id"],"review" if ai.get("risk")=="high" else "prepared")
-        await send_preview(context.bot,config.TELEGRAM_OWNER_CHAT_ID,a,ai)
+        if ai.get("risk")=="low" and config.AUTO_PUBLISH_LOW_RISK and config.META_ENABLED:
+            poster=make_poster(ai["headline"],a["category"],a["id"])
+            image_url=f"{config.PUBLIC_BASE_URL}/media/{poster.split('/')[-1]}"
+            try:
+                result=await asyncio.to_thread(post_instagram_image,image_url,ai["caption_instagram"])
+                set_status(a["id"],"published")
+                await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,f"✅ Publicado no Instagram\n{ai['headline']}\nID: {result.get('id','')}")
+            except Exception as e:
+                set_status(a["id"],"review")
+                await context.bot.send_message(config.TELEGRAM_OWNER_CHAT_ID,f"⚠️ Falha ao publicar automaticamente: {e}")
+                await send_preview(context.bot,config.TELEGRAM_OWNER_CHAT_ID,a,ai)
+        else:
+            set_status(a["id"],"review" if ai.get("risk")=="high" else "prepared")
+            await send_preview(context.bot,config.TELEGRAM_OWNER_CHAT_ID,a,ai)
 
 async def start(update:Update,context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🗞 Byte Curioso 27 News Bot ativo.\n/buscar /pendentes /status")
@@ -36,6 +50,16 @@ async def buscar(update:Update,context:ContextTypes.DEFAULT_TYPE):
 async def pendentes_cmd(update:Update,context:ContextTypes.DEFAULT_TYPE):
     rows=pending()
     await update.message.reply_text("Sem pendências." if not rows else "\n".join(f"#{r['id']} — {r['title'][:80]}" for r in rows[:15]))
+
+async def testinstagram(update:Update,context:ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🧪 Testando publicação no Instagram...")
+    poster=make_test_poster()
+    image_url=f"{config.PUBLIC_BASE_URL}/media/{poster.split('/')[-1]}"
+    try:
+        result=await asyncio.to_thread(post_instagram_image,image_url,"🧪 Teste automático do Byte Curioso 27. Sistema de publicação conectado. #ByteCurioso27 #Rondonia")
+        await update.message.reply_text(f"✅ Teste publicado no Instagram. ID: {result.get('id','')}")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Falha no teste do Instagram: {e}")
 
 async def status(update:Update,context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ Ativo\nBusca: {config.SCAN_INTERVAL_MINUTES} min\nMeta: {config.META_ENABLED}\nTikTok: {config.TIKTOK_ENABLED}")
@@ -65,6 +89,7 @@ def run():
     app.add_handler(CommandHandler("buscar",buscar))
     app.add_handler(CommandHandler("pendentes",pendentes_cmd))
     app.add_handler(CommandHandler("status",status))
+    app.add_handler(CommandHandler("testinstagram",testinstagram))
     app.add_handler(CallbackQueryHandler(callback))
     app.job_queue.run_repeating(scan_job,interval=config.SCAN_INTERVAL_MINUTES*60,first=10)
     app.run_polling(drop_pending_updates=True)
