@@ -147,3 +147,17 @@ def recent_marker_exists(marker, max_pages=5):
     except Exception:
         return False
     return False
+
+
+def check_instagram_connection():
+    if not (config.META_ACCESS_TOKEN and config.INSTAGRAM_USER_ID):
+        return {"ok":False,"reason":"credenciais_ausentes"}
+    r=requests.get(
+        _endpoint(config.INSTAGRAM_USER_ID),
+        params={"fields":"id,username,account_type","access_token":config.META_ACCESS_TOKEN},
+        timeout=30,
+    )
+    if not r.ok:
+        return {"ok":False,"status_code":r.status_code,"error":r.text[:300]}
+    data=r.json()
+    return {"ok":True,"id":data.get("id",""),"username":data.get("username",""),"account_type":data.get("account_type","")}
