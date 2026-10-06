@@ -1,106 +1,169 @@
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from pathlib import Path
-import math
+from io import BytesIO
+import base64, requests
 
 MEDIA_DIR="/tmp/media"
+ASSET_DIR="/tmp/bytecurioso_assets"
 Path(MEDIA_DIR).mkdir(parents=True, exist_ok=True)
+Path(ASSET_DIR).mkdir(parents=True, exist_ok=True)
 W,H=1080,1920
 
 def _font(size):
-    for p in ["/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf",
-              "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-              "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf"]:
+    for p in [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+    ]:
         if Path(p).exists():
             return ImageFont.truetype(p,size)
     return ImageFont.load_default()
 
-def _fit_lines(draw,text,max_width,start_size=112,min_size=58,max_lines=6):
+def _decode_asset(src_b64, out_name):
+    out=Path(ASSET_DIR)/out_name
+    if out.exists():
+        return out
+    p=Path(src_b64)
+    if p.exists():
+        try:
+            out.write_bytes(base64.b64decode(p.read_text(encoding="utf-8")))
+            return out
+        except Exception:
+            pass
+    return None
+
+AVATAR=_decode_asset("assets/avatar_bc27.jpg.b64","avatar.jpg")
+SELO=_decode_asset("assets/selo_bc27.jpg.b64","selo.jpg")
+
+def _circle_crop(path,size):
+    if not path or not Path(path).exists():
+        return None
+    im=Image.open(path).convert("RGB").resize((size,size))
+    mask=Image.new("L",(size,size),0)
+    md=ImageDraw.Draw(mask)
+    md.ellipse((0,0,size,size),fill=255)
+    out=Image.new("RGBA",(size,size),(0,0,0,0))
+    out.paste(im,(0,0),mask)
+    return out
+
+def _download_image(url):
+    if not url:
+        return None
+    try:
+        r=requests.get(url,timeout=15,headers={"User-Agent":"Mozilla/5.0 ByteCurioso27NewsBot/1.0"})
+        if not r.ok or len(r.content)<5000:
+            return None
+        return Image.open(BytesIO(r.content)).convert("RGB")
+    except Exception:
+        return None
+
+def _cover(im,w,h):
+    if im is None:
+        return None
+    scale=max(w/im.width,h/im.height)
+    nw=max(1,int(im.width*scale)); nh=max(1,int(im.height*scale))
+    im=im.resize((nw,nh),Image.Resampling.LANCZOS)
+    left=(nw-w)//2; top=(nh-h)//2
+    return im.crop((left,top,left+w,top+h))
+
+def _fit_lines(draw,text,max_width,start_size=116,min_size=54,max_lines=6):
     words=text.upper().split()
+    best=[]
     for size in range(start_size,min_size-1,-4):
         f=_font(size); lines=[]; cur=""
         for word in words:
-            test=(cur+" "+word).strip()
-            if draw.textbbox((0,0),test,font=f)[2] <= max_width:
-                cur=test
+            t=(cur+" "+word).strip()
+            if draw.textbbox((0,0),t,font=f)[2] <= max_width:
+                cur=t
             else:
                 if cur: lines.append(cur)
                 cur=word
         if cur: lines.append(cur)
-        if len(lines) <= max_lines:
+        best=lines
+        if len(lines)<=max_lines:
             return f,lines
-    return _font(min_size),lines[:max_lines]
+    return _font(min_size),best[:max_lines]
 
-def _tech_background():
-    img=Image.new("RGB",(W,H),(4,5,8))
+def make_poster(headline,category,article_id,image_url=""):
+    orange=(255,105,0); white=(250,250,250); yellow=(255,211,0)
+    img=Image.new("RGB",(W,H),(5,6,9))
+    src=_download_image(image_url)
+
+    # Full-screen blurred image backdrop when available
+    if src:
+        bg=_cover(src,W,H).filter(ImageFilter.GaussianBlur(18))
+        shade=Image.new("RGBA",(W,H),(0,0,0,135))
+        bg=bg.convert("RGBA")
+        bg.alpha_composite(shade)
+        img=bg.convert("RGB")
+
     d=ImageDraw.Draw(img)
-    orange=(255,105,0); blue=(0,130,255)
-    for y in range(H):
-        t=y/H
-        r=int(8+10*(1-t)); g=int(7+5*(1-t)); b=int(10+8*t)
-        d.line((0,y,W,y),fill=(r,g,b))
-    for i in range(22):
-        x=(i*173)%W
-        d.line((x,0,(x+420)%W,H),fill=(52,22,4),width=3)
-    for y in range(180,H,210):
-        d.line((0,y,230,y+90),fill=(78,30,3),width=3)
-        d.line((W-230,y+20,W,y+100),fill=(0,45,80),width=3)
     d.rectangle((0,0,W,34),fill=orange)
-    d.rectangle((0,H-44,W,H),fill=orange)
-    return img
+    d.rectangle((0,H-42,W,H),fill=orange)
 
-def make_poster(headline,category,article_id):
-    img=_tech_background()
-    d=ImageDraw.Draw(img)
-    orange=(255,105,0); white=(248,248,248); blue=(0,150,255); yellow=(255,205,0)
+    # Masthead
+    d.rounded_rectangle((40,45,W-40,205),radius=28,fill=(7,8,12),outline=orange,width=5)
+    d.text((205,78),"BYTE CURIOSO 27",font=_font(60),fill=white)
+    d.rounded_rectangle((785,84,1000,170),radius=14,fill=(165,0,0))
+    d.text((822,98),"NEWS",font=_font(43),fill=white)
 
-    # masthead, inspired by high-impact local-news cards but branded uniquely
-    d.rounded_rectangle((50,55,W-50,210),radius=28,fill=(7,8,12),outline=orange,width=5)
-    d.text((82,78),"BYTE",font=_font(64),fill=white)
-    d.text((275,78),"CURIOSO 27",font=_font(64),fill=orange)
-    d.rounded_rectangle((735,86,995,174),radius=14,fill=(170,0,0))
-    d.text((770,100),"NEWS",font=_font(49),fill=white)
+    avatar=_circle_crop(AVATAR,125)
+    if avatar:
+        img.paste(avatar,(62,62),avatar)
+        d.ellipse((58,58,191,191),outline=orange,width=5)
 
-    # identity circles
-    d.ellipse((55,260,335,540),fill=(12,12,18),outline=orange,width=8)
-    d.ellipse((100,305,175,380),fill=orange)
-    d.ellipse((215,305,290,380),fill=orange)
-    d.arc((105,340,285,475),15,165,fill=orange,width=10)
-    d.text((106,468),"BYTE",font=_font(32),fill=white)
+    selo=_circle_crop(SELO,125)
+    if selo:
+        img.paste(selo,(925-62,62),selo)
 
-    d.ellipse((745,260,1025,540),fill=(8,10,18),outline=blue,width=8)
-    d.arc((785,300,985,500),0,360,fill=orange,width=6)
-    d.line((885,300,885,500),fill=blue,width=4)
-    d.line((785,400,985,400),fill=blue,width=4)
-    d.text((808,462),"RONDÔNIA",font=_font(29),fill=white)
+    # Main news image
+    photo_top=245; photo_h=760
+    if src:
+        photo=_cover(src,W-90,photo_h)
+        img.paste(photo,(45,photo_top))
+        d=ImageDraw.Draw(img)
+        d.rectangle((45,photo_top,W-45,photo_top+photo_h),outline=(255,255,255),width=3)
+        grad=Image.new("RGBA",(W-90,280),(0,0,0,0))
+        gd=ImageDraw.Draw(grad)
+        for y in range(280):
+            a=int(220*(y/279))
+            gd.line((0,y,W-90,y),fill=(0,0,0,a))
+        img.paste(grad,(45,photo_top+photo_h-280),grad)
+    else:
+        d.rounded_rectangle((45,photo_top,W-45,photo_top+photo_h),radius=28,fill=(12,13,18),outline=(110,35,0),width=4)
+        d.text((170,520),"BYTE CURIOSO 27",font=_font(70),fill=orange)
+        d.text((245,620),"RONDÔNIA NEWS",font=_font(62),fill=white)
 
-    # category ribbon
-    d.polygon([(55,590),(820,590),(880,640),(820,690),(55,690)],fill=(155,0,0))
-    d.text((90,612),f"{category.upper()} • RONDÔNIA",font=_font(40),fill=white)
+    # Category ribbon
+    d.polygon([(45,940),(770,940),(840,995),(770,1050),(45,1050)],fill=(155,0,0))
+    cat=(category or "NOTÍCIA").upper()
+    d.text((80,965),f"{cat} • RONDÔNIA",font=_font(39),fill=white)
 
-    # headline panel
-    d.rounded_rectangle((45,735,W-45,1600),radius=34,fill=(5,6,9),outline=(90,25,0),width=4)
-    f,lines=_fit_lines(d,headline,W-120,118,58,6)
+    # Headline block
+    d.rounded_rectangle((45,1080,W-45,1688),radius=34,fill=(4,5,8),outline=(100,30,0),width=4)
+    f,lines=_fit_lines(d,headline,W-125,112,54,6)
     line_h=int(f.size*1.08)
     total=line_h*len(lines)
-    y=790+max(0,(720-total)//2)
-    highlight_words={"RONDÔNIA","GOVERNO","POLÍCIA","ELEIÇÕES","JUSTIÇA","SAÚDE","TECNOLOGIA","MULHERES","ALERTA"}
-    for idx,line in enumerate(lines):
-        fill=white
-        if idx==1 or any(w in line.split() for w in highlight_words):
-            fill=yellow if idx%2 else orange
+    y=1135+max(0,(500-total)//2)
+    for i,line in enumerate(lines):
+        color=white
+        if i==1:
+            color=yellow
+        elif i in (0,3):
+            color=orange
         bbox=d.textbbox((0,0),line,font=f)
         x=(W-(bbox[2]-bbox[0]))//2
-        d.text((x,y),line,font=f,fill=fill,stroke_width=3,stroke_fill=(0,0,0))
+        d.text((x,y),line,font=f,fill=color,stroke_width=3,stroke_fill=(0,0,0))
         y+=line_h
 
-    # lower branding
-    d.rounded_rectangle((235,1665,845,1735),radius=28,fill=(8,8,12),outline=orange,width=4)
-    d.text((302,1675),"@bytecurioso27",font=_font(40),fill=orange)
-    d.text((80,1800),"INFORMAÇÃO • RONDÔNIA • TECNOLOGIA",font=_font(34),fill=white)
+    # Footer
+    d.rounded_rectangle((210,1740,870,1815),radius=28,fill=(7,8,12),outline=orange,width=4)
+    d.text((305,1751),"@bytecurioso27",font=_font(41),fill=orange)
+    d.text((122,1850),"INFORMAÇÃO • RONDÔNIA • TECNOLOGIA",font=_font(32),fill=white)
 
     path=f"{MEDIA_DIR}/post_{article_id}.jpg"
     img.save(path,quality=95)
     return path
 
 def make_test_poster():
-    return make_poster("NOVO PADRÃO VISUAL AUTOMÁTICO EM REELS","teste","instagram_test")
+    return make_poster("NOVO EDITOR AUTOMÁTICO DO BYTE CURIOSO 27 ESTÁ NO AR","teste","instagram_test","")
