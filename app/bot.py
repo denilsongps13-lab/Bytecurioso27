@@ -7,7 +7,7 @@ from app.fetcher import scan_sources,enrich_image,valid_story,classify_category
 from app.editor import prepare,public_title,finish_caption
 from app.poster import make_poster,make_test_poster,asset_status
 from app.reels import make_reel_from_poster
-from app.publishers.meta import post_instagram_image,post_instagram_reel,recent_marker_exists,check_instagram_connection,safe_error
+from app.publishers.meta import post_instagram_image,post_instagram_reel,check_instagram_connection,safe_error
 
 SCAN_LOCK=asyncio.Lock()
 
@@ -120,18 +120,12 @@ async def _scan_job(context):
                 await send_preview(context.bot,config.TELEGRAM_OWNER_CHAT_ID,a,ai)
                 continue
 
-            marker="#BC27"+fp(a.get("title",""),a.get("url",""))[:12]
-            if await asyncio.to_thread(recent_marker_exists,marker):
-                set_status(aid,"duplicate")
-                print(f"DUPLICATE_SKIP id={aid}",flush=True)
-                continue
-
             if not await asyncio.to_thread(claim_article,aid):
                 print(f'DUPLICATE_CLAIM_SKIP id={aid}',flush=True)
                 continue
             poster=await asyncio.to_thread(make_poster,ai["headline"],a["category"],aid,a.get("image_url",""),a.get("source",""))
             image_url=f"{config.PUBLIC_BASE_URL}/media/{poster.split('/')[-1]}"
-            caption=(finish_caption(a,ai["caption_instagram"])+"\n\n"+marker).strip()
+            caption=finish_caption(a,ai["caption_instagram"]).strip()
             result=await asyncio.to_thread(post_instagram_image,image_url,caption)
             if result.get("status")!="published":
                 raise RuntimeError(f"Meta não publicou: {result}")
@@ -261,8 +255,7 @@ async def callback(update:Update,context:ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("⏸ Publicação pausada. Nada foi enviado ao Instagram.")
         return
     try:
-        marker='#BC27'+fp(a.get('title',''),a.get('url',''))[:12]
-        if a.get('status')=='published' or await asyncio.to_thread(recent_marker_exists,marker):
+        if a.get('status')=='published':
             await q.message.reply_text('Esta notícia já foi publicada.')
             return
         if not await asyncio.to_thread(claim_article,aid,a.get('status')):
@@ -273,7 +266,7 @@ async def callback(update:Update,context:ContextTypes.DEFAULT_TYPE):
         caption=finish_caption(a,ai.get("caption_instagram") or a.get("title") or "")
         poster=await asyncio.to_thread(make_poster,headline,a.get("category") or "notícia",aid,a.get("image_url",""),a.get("source",""))
         image_url=f"{config.PUBLIC_BASE_URL}/media/{poster.split('/')[-1]}"
-        result=await asyncio.to_thread(post_instagram_image,image_url,caption+"\n\n"+marker)
+        result=await asyncio.to_thread(post_instagram_image,image_url,caption)
         if result.get("status")!="published":
             raise RuntimeError(str(result))
         set_status(aid,"published")
