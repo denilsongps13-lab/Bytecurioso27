@@ -2,6 +2,7 @@ import json,html,asyncio,random
 from telegram import InlineKeyboardButton,InlineKeyboardMarkup,Update
 from telegram.ext import Application,CommandHandler,CallbackQueryHandler,ContextTypes
 from app import config
+from app.judit_auth_test import judit_teste
 from app.db import init_db,get_article,pending,set_status,queued_articles,fp,claim_article
 from app.fetcher import scan_sources,enrich_image,valid_story,classify_category
 from app.editor import prepare,public_title,finish_caption
@@ -318,6 +319,7 @@ def run():
     app.add_handler(CommandHandler("testarte",owner_only(testarte)))
     app.add_handler(CommandHandler("pendentes",owner_only(pendentes_cmd)))
     app.add_handler(CommandHandler("status",owner_only(status)))
+    app.add_handler(CommandHandler("judit_teste",owner_only(judit_teste)))
     app.add_handler(CommandHandler("testinstagram",owner_only(testinstagram)))
     app.add_handler(CallbackQueryHandler(owner_only(callback)))
     app.job_queue.run_once(startup_selftest,when=5)
