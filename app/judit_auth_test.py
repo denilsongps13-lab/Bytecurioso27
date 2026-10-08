@@ -8,7 +8,7 @@ def _probe():
     key = os.environ.get("JUDIT_API_KEY", "").strip()
     if not key:
         return "⚠️ JUDIT_API_KEY não configurada no Render."
-    url = "https://requests.production.judit.io/requests?page=1"
+    url = "https://requests.production.judit.io/requests?page_size=1"
     req = urllib.request.Request(url, headers={"api-key": key, "Accept": "application/json"}, method="GET")
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
